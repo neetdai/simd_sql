@@ -1,6 +1,6 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TokenKind {
-    Symbol,
+    LineBreak,
     Number,
     StringLiteral,
     Eof,

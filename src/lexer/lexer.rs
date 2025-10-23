@@ -24,7 +24,7 @@ impl<'a> Lexer<'a> {
     // 跳过空白符
     #[inline]
     fn skip_whitespace(&mut self) {
-        while let Some((index, _)) = self.inner.next_if(|(_, c)| c.is_whitespace()) {
+        while let Some((index, _)) = self.inner.next_if(|(_, c)| *c == ' ' || *c == '\t' || *c == '\r') {
             self.position = index;
         }
     }
@@ -146,6 +146,16 @@ impl<'a> Lexer<'a> {
                         ';' => {
                             let token = Token {
                                 kind: TokenKind::Eof,
+                                start_position: *index,
+                                end_position: *index,
+                            };
+                            self.position = *index;
+                            self.inner.next();
+                            tokens.push(token);
+                        }
+                        '\n' => {
+                            let token = Token {
+                                kind: TokenKind::LineBreak,
                                 start_position: *index,
                                 end_position: *index,
                             };
@@ -421,5 +431,16 @@ mod tests {
                 end_position: 9,
             }
         ]);
+    }
+
+    #[test]
+    fn test_tokenize_line_break() {
+        let mut lexer = Lexer::new("\n");
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(tokens, vec![Token {
+            kind: TokenKind::LineBreak,
+            start_position: 0,
+            end_position: 0,
+        }]);
     }
 }

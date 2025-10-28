@@ -2,7 +2,7 @@ use std::{iter::Peekable, str::CharIndices};
 
 use crate::{
     error::ParserError,
-    token::{Token, TokenKind},
+    token::{Token, TokenKind, TokenTable},
 };
 
 #[derive(Debug)]
@@ -34,39 +34,32 @@ impl<'a> Lexer<'a> {
 
     // 匹配数字
     #[inline]
-    fn match_number(&mut self) -> Result<Token, ParserError> {
+    fn match_number(&mut self) -> Result<(TokenKind, usize, usize), ParserError> {
         let start_position = self.position;
         while let Some((index, _)) = self.inner.next_if(|(_, c)| c.is_ascii_digit()) {
             self.position = index;
         }
         let end_position = self.position;
 
-        Ok(Token {
-            kind: TokenKind::Number,
-            start_position,
-            end_position,
-        })
+        Ok((TokenKind::Number, start_position, end_position))
     }
 
     // 匹配字符串
     #[inline]
-    fn match_string(&mut self) -> Result<Token, ParserError> {
+    fn match_identify(&mut self) -> Result<(TokenKind, usize, usize), ParserError> {
         let start_position = self.position;
         while let Some((index, _)) = self.inner.next_if(|(_, c)| c.is_alphabetic() || *c == 'c') {
             self.position = index;
         }
         let end_position = self.position;
-        Ok(Token {
-            kind: TokenKind::StringLiteral,
-            start_position,
-            end_position,
-        })
+        
+        Ok((TokenKind::Identifier, start_position, end_position))
     }
 
     // 词法分析主函数
     #[inline]
-    pub(crate) fn tokenize(&mut self) -> Result<Vec<Token>, ParserError> {
-        let mut tokens = Vec::new();
+    pub(crate) fn tokenize(&mut self) -> Result<TokenTable, ParserError> {
+        let mut table = TokenTable::new();
 
         loop {
             self.skip_whitespace();
@@ -76,112 +69,72 @@ impl<'a> Lexer<'a> {
                     self.position = *index;
                     match c {
                         '0'..='9' => {
-                            let token = self.match_number()?;
-                            tokens.push(token);
+                            let (kind, start, end) = self.match_number()?;
+                            table.push(kind, start, end);
                         }
                         c if c.is_alphabetic() => {
-                            let token = self.match_string()?;
-                            tokens.push(token);
+                            let (kind, start, end)  = self.match_identify()?;
+                            table.push(kind, start, end);
                         }
                         '(' => {
-                            let token = Token {
-                                kind: TokenKind::LeftParen,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::LeftParen, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                         ')' => {
-                            let token = Token {
-                                kind: TokenKind::RightParen,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::RightParen, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                         ',' => {
-                            let token = Token {
-                                kind: TokenKind::Comma,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::Comma, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                         '\'' => {
-                            let token = Token {
-                                kind: TokenKind::SingleQuotation,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::SingleQuotation, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                         '"' => {
-                            let token = Token {
-                                kind: TokenKind::DoubleQuotation,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::DoubleQuotation, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                         '\\' => {
-                            let token = Token {
-                                kind: TokenKind::BackSlash,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::BackSlash, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                         ';' => {
-                            let token = Token {
-                                kind: TokenKind::Eof,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::Eof, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                         '\n' => {
-                            let token = Token {
-                                kind: TokenKind::LineBreak,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::LineBreak, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                         '>' => {
                             let index_now = *index;
                             self.inner.next();
                             if let Some((index_next, _)) = self.inner.next_if(|(_, c)| *c == '=') {
-                                let token = Token {
-                                    kind: TokenKind::GreaterEqual,
-                                    start_position: index_now,
-                                    end_position: index_next,
-                                };
+                                let (kind, start, end) = (TokenKind::GreaterEqual, index_now, index_next);
                                 self.position = index_next;
-                                tokens.push(token);
+                                table.push(kind, start, end);
                             } else {
-                                let token = Token {
-                                    kind: TokenKind::Greater,
-                                    start_position: index_now,
-                                    end_position: index_now,
-                                };
+                                let (kind, start, end) = (TokenKind::Greater, index_now, index_now);
                                 self.position = index_now;
-                                tokens.push(token);
+                                table.push(kind, start, end);
                             }
                         }
                         '<' => {
@@ -190,55 +143,35 @@ impl<'a> Lexer<'a> {
 
                             match self.inner.peek() {
                                 Some((index_next, '>')) => {
-                                    let token = Token {
-                                        kind: TokenKind::NotEqual,
-                                        start_position: index_now,
-                                        end_position: *index_next,
-                                    };
+                                    let (kind, start, end) = (TokenKind::NotEqual, index_now, *index_next);
                                     self.position = index_next + 1;
                                     self.inner.next();
-                                    tokens.push(token);
+                                    table.push(kind, start, end);
                                 }
                                 Some((index_next, '=')) => {
-                                    let token = Token {
-                                        kind: TokenKind::LessEqual,
-                                        start_position: index_now,
-                                        end_position: *index_next,
-                                    };
+                                    let (kind, start, end) = (TokenKind::LessEqual, index_now, *index_next);
                                     self.position = index_next + 1;
                                     self.inner.next();
-                                    tokens.push(token);
+                                    table.push(kind, start, end);
                                 }
                                 _ => {
-                                    let token = Token {
-                                        kind: TokenKind::Less,
-                                        start_position: index_now,
-                                        end_position: index_now,
-                                    };
+                                let (kind, start, end) = (TokenKind::Less, index_now, index_now);
                                     self.position = index_now;
-                                    tokens.push(token);
+                                    table.push(kind, start, end);
                                 }
                             }
                         }
                         '=' => {
-                            let token = Token {
-                                kind: TokenKind::Equal,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::Equal, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                         _ => {
-                            let token = Token {
-                                kind: TokenKind::Unknown,
-                                start_position: *index,
-                                end_position: *index,
-                            };
+                            let (kind, start, end) = (TokenKind::Unknown, *index, *index);
                             self.position = *index;
                             self.inner.next();
-                            tokens.push(token);
+                            table.push(kind, start, end);
                         }
                     }
                 }
@@ -246,7 +179,7 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        Ok(tokens)
+        Ok(table)
     }
 }
 

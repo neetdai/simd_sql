@@ -24,7 +24,10 @@ impl<'a> Lexer<'a> {
     // 跳过空白符
     #[inline]
     fn skip_whitespace(&mut self) {
-        while let Some((index, _)) = self.inner.next_if(|(_, c)| *c == ' ' || *c == '\t' || *c == '\r') {
+        while let Some((index, _)) = self
+            .inner
+            .next_if(|(_, c)| *c == ' ' || *c == '\t' || *c == '\r')
+        {
             self.position = index;
         }
     }
@@ -49,10 +52,7 @@ impl<'a> Lexer<'a> {
     #[inline]
     fn match_string(&mut self) -> Result<Token, ParserError> {
         let start_position = self.position;
-        while let Some((index, _)) = self
-            .inner
-            .next_if(|(_, c)| c.is_alphabetic() || *c == 'c')
-        {
+        while let Some((index, _)) = self.inner.next_if(|(_, c)| c.is_alphabetic() || *c == 'c') {
             self.position = index;
         }
         let end_position = self.position;
@@ -163,6 +163,73 @@ impl<'a> Lexer<'a> {
                             self.inner.next();
                             tokens.push(token);
                         }
+                        '>' => {
+                            let index_now = *index;
+                            self.inner.next();
+                            if let Some((index_next, _)) = self.inner.next_if(|(_, c)| *c == '=') {
+                                let token = Token {
+                                    kind: TokenKind::GreaterEqual,
+                                    start_position: index_now,
+                                    end_position: index_next,
+                                };
+                                self.position = index_next;
+                                tokens.push(token);
+                            } else {
+                                let token = Token {
+                                    kind: TokenKind::Greater,
+                                    start_position: index_now,
+                                    end_position: index_now,
+                                };
+                                self.position = index_now;
+                                tokens.push(token);
+                            }
+                        }
+                        '<' => {
+                            let index_now = *index;
+                            self.inner.next();
+
+                            match self.inner.peek() {
+                                Some((index_next, '>')) => {
+                                    let token = Token {
+                                        kind: TokenKind::NotEqual,
+                                        start_position: index_now,
+                                        end_position: *index_next,
+                                    };
+                                    self.position = index_next + 1;
+                                    self.inner.next();
+                                    tokens.push(token);
+                                }
+                                Some((index_next, '=')) => {
+                                    let token = Token {
+                                        kind: TokenKind::LessEqual,
+                                        start_position: index_now,
+                                        end_position: *index_next,
+                                    };
+                                    self.position = index_next + 1;
+                                    self.inner.next();
+                                    tokens.push(token);
+                                }
+                                _ => {
+                                    let token = Token {
+                                        kind: TokenKind::Less,
+                                        start_position: index_now,
+                                        end_position: index_now,
+                                    };
+                                    self.position = index_now;
+                                    tokens.push(token);
+                                }
+                            }
+                        }
+                        '=' => {
+                            let token = Token {
+                                kind: TokenKind::Equal,
+                                start_position: *index,
+                                end_position: *index,
+                            };
+                            self.position = *index;
+                            self.inner.next();
+                            tokens.push(token);
+                        }
                         _ => {
                             let token = Token {
                                 kind: TokenKind::Unknown,
@@ -257,18 +324,21 @@ mod tests {
         let mut lexer = Lexer::new("hello world");
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(tokens.len(), 2);
-        assert_eq!(tokens, vec![
-            Token {
-                kind: TokenKind::StringLiteral,
-                start_position: 0,
-                end_position: 4,
-            },
-            Token {
-                kind: TokenKind::StringLiteral,
-                start_position: 6,
-                end_position: 10,
-            }
-        ])
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 0,
+                    end_position: 4,
+                },
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 6,
+                    end_position: 10,
+                }
+            ]
+        )
     }
 
     #[test]
@@ -276,43 +346,46 @@ mod tests {
         let mut lexer = Lexer::new("(),'\"\\;");
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(tokens.len(), 7);
-        assert_eq!(tokens, vec![
-            Token {
-                kind: TokenKind::LeftParen,
-                start_position: 0,
-                end_position: 0,
-            },
-            Token {
-                kind: TokenKind::RightParen,
-                start_position: 1,
-                end_position: 1,
-            },
-            Token {
-                kind: TokenKind::Comma,
-                start_position: 2,
-                end_position: 2,
-            },
-            Token {
-                kind: TokenKind::SingleQuotation,
-                start_position: 3,
-                end_position: 3,
-            },
-            Token {
-                kind: TokenKind::DoubleQuotation,
-                start_position: 4,
-                end_position: 4,
-            },
-            Token {
-                kind: TokenKind::BackSlash,
-                start_position: 5,
-                end_position: 5,
-            },
-            Token {
-                kind: TokenKind::Eof,
-                start_position: 6,
-                end_position: 6,
-            }
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    kind: TokenKind::LeftParen,
+                    start_position: 0,
+                    end_position: 0,
+                },
+                Token {
+                    kind: TokenKind::RightParen,
+                    start_position: 1,
+                    end_position: 1,
+                },
+                Token {
+                    kind: TokenKind::Comma,
+                    start_position: 2,
+                    end_position: 2,
+                },
+                Token {
+                    kind: TokenKind::SingleQuotation,
+                    start_position: 3,
+                    end_position: 3,
+                },
+                Token {
+                    kind: TokenKind::DoubleQuotation,
+                    start_position: 4,
+                    end_position: 4,
+                },
+                Token {
+                    kind: TokenKind::BackSlash,
+                    start_position: 5,
+                    end_position: 5,
+                },
+                Token {
+                    kind: TokenKind::Eof,
+                    start_position: 6,
+                    end_position: 6,
+                }
+            ]
+        );
     }
 
     #[test]
@@ -320,53 +393,133 @@ mod tests {
         let mut lexer = Lexer::new("func(123, 'abc');");
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(tokens.len(), 9);
-        assert_eq!(tokens, vec![
-            Token {
-                kind: TokenKind::StringLiteral,
-                start_position: 0,
-                end_position: 3,
-            },
-            Token {
-                kind: TokenKind::LeftParen,
-                start_position: 4,
-                end_position: 4,
-            },
-            Token {
-                kind: TokenKind::Number,
-                start_position: 5,
-                end_position: 7,
-            },
-            Token {
-                kind: TokenKind::Comma,
-                start_position: 8,
-                end_position: 8,
-            },
-            Token {
-                kind: TokenKind::SingleQuotation,
-                start_position: 10,
-                end_position: 10,
-            },
-            Token {
-                kind: TokenKind::StringLiteral,
-                start_position: 11,
-                end_position: 13,
-            },
-            Token {
-                kind: TokenKind::SingleQuotation,
-                start_position: 14,
-                end_position: 14,
-            },
-            Token {
-                kind: TokenKind::RightParen,
-                start_position: 15,
-                end_position: 15,
-            },
-            Token {
-                kind: TokenKind::Eof,
-                start_position: 16,
-                end_position: 16,
-            }
-        ])
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 0,
+                    end_position: 3,
+                },
+                Token {
+                    kind: TokenKind::LeftParen,
+                    start_position: 4,
+                    end_position: 4,
+                },
+                Token {
+                    kind: TokenKind::Number,
+                    start_position: 5,
+                    end_position: 7,
+                },
+                Token {
+                    kind: TokenKind::Comma,
+                    start_position: 8,
+                    end_position: 8,
+                },
+                Token {
+                    kind: TokenKind::SingleQuotation,
+                    start_position: 10,
+                    end_position: 10,
+                },
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 11,
+                    end_position: 13,
+                },
+                Token {
+                    kind: TokenKind::SingleQuotation,
+                    start_position: 14,
+                    end_position: 14,
+                },
+                Token {
+                    kind: TokenKind::RightParen,
+                    start_position: 15,
+                    end_position: 15,
+                },
+                Token {
+                    kind: TokenKind::Eof,
+                    start_position: 16,
+                    end_position: 16,
+                }
+            ]
+        )
+    }
+
+    #[test]
+    fn test_tokenize_cmp() {
+        let mut lexer = Lexer::new("a > b >= c < d <= e <> f = g");
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(tokens.len(), 13);
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 0,
+                    end_position: 0,
+                },
+                Token {
+                    kind: TokenKind::Greater,
+                    start_position: 2,
+                    end_position: 2,
+                },
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 4,
+                    end_position: 4,
+                },
+                Token {
+                    kind: TokenKind::GreaterEqual,
+                    start_position: 6,
+                    end_position: 7,
+                },
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 9,
+                    end_position: 9,
+                },
+                Token {
+                    kind: TokenKind::Less,
+                    start_position: 11,
+                    end_position: 11,
+                },
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 13,
+                    end_position: 13,
+                },
+                Token {
+                    kind: TokenKind::LessEqual,
+                    start_position: 15,
+                    end_position: 16,
+                },
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 18,
+                    end_position: 18,
+                },
+                Token {
+                    kind: TokenKind::NotEqual,
+                    start_position: 20,
+                    end_position: 21,
+                },
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 23,
+                    end_position: 23,
+                },
+                Token {
+                    kind: TokenKind::Equal,
+                    start_position: 25,
+                    end_position: 25,
+                },
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 27,
+                    end_position: 27,
+                },
+            ]
+        )
     }
 
     #[test]
@@ -374,23 +527,26 @@ mod tests {
         let mut lexer = Lexer::new("@#$");
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens, vec![
-            Token {
-                kind: TokenKind::Unknown,
-                start_position: 0,
-                end_position: 0,
-            },
-            Token {
-                kind: TokenKind::Unknown,
-                start_position: 1,
-                end_position: 1,
-            },
-            Token {
-                kind: TokenKind::Unknown,
-                start_position: 2,
-                end_position: 2,
-            },
-        ])
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    kind: TokenKind::Unknown,
+                    start_position: 0,
+                    end_position: 0,
+                },
+                Token {
+                    kind: TokenKind::Unknown,
+                    start_position: 1,
+                    end_position: 1,
+                },
+                Token {
+                    kind: TokenKind::Unknown,
+                    start_position: 2,
+                    end_position: 2,
+                },
+            ]
+        )
     }
 
     #[test]
@@ -405,18 +561,21 @@ mod tests {
         let mut lexer = Lexer::new("  hello   world  ");
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(tokens.len(), 2);
-        assert_eq!(tokens, vec![
-            Token {
-                kind: TokenKind::StringLiteral,
-                start_position: 2,
-                end_position: 6,
-            },
-            Token {
-                kind: TokenKind::StringLiteral,
-                start_position: 10,
-                end_position: 14,
-            }
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 2,
+                    end_position: 6,
+                },
+                Token {
+                    kind: TokenKind::StringLiteral,
+                    start_position: 10,
+                    end_position: 14,
+                }
+            ]
+        );
     }
 
     #[test]
@@ -424,23 +583,27 @@ mod tests {
         let mut lexer = Lexer::new("你好世界");
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(tokens, vec![
-            Token {
+        assert_eq!(
+            tokens,
+            vec![Token {
                 kind: TokenKind::StringLiteral,
                 start_position: 0,
                 end_position: 9,
-            }
-        ]);
+            }]
+        );
     }
 
     #[test]
     fn test_tokenize_line_break() {
         let mut lexer = Lexer::new("\n");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens, vec![Token {
-            kind: TokenKind::LineBreak,
-            start_position: 0,
-            end_position: 0,
-        }]);
+        assert_eq!(
+            tokens,
+            vec![Token {
+                kind: TokenKind::LineBreak,
+                start_position: 0,
+                end_position: 0,
+            }]
+        );
     }
 }

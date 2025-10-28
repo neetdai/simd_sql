@@ -1,2 +1,2 @@
+mod avx2_lexer;
 mod lexer;
-mod simd_lexer;

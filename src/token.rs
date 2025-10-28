@@ -11,6 +11,17 @@ pub(crate) enum TokenKind {
     BackSlash,
     Comma,
     Unknown,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    Equal,
+    NotEqual,
+    Plus,
+    Subtract,
+    Multiply,
+    Divide,
+    Mod,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

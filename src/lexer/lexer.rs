@@ -261,7 +261,11 @@ mod tests {
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
-            vec![Token {
+            vec![Token{
+                kind: TokenKind::LineBreak,
+                start_position: 4,
+                end_position: 4, 
+            }, Token {
                 kind: TokenKind::StringLiteral,
                 start_position: 8,
                 end_position: 12,

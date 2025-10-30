@@ -1,4 +1,4 @@
-use std::{iter::Peekable, str::CharIndices};
+use std::{iter::Peekable, process::Termination, str::CharIndices};
 
 use crate::{
     error::ParserError,
@@ -56,6 +56,36 @@ impl<'a> Lexer<'a> {
         Ok((TokenKind::Identifier, start_position, end_position))
     }
 
+    fn scan_string(&mut self, terminator: char) -> Result<(TokenKind, usize, usize), ParserError> {
+        let start_position = self.position;
+        loop {
+            match self.inner.peek() {
+                Some((index_now, c)) if *c == terminator =>  {
+                    self.position = *index_now;
+                    self.inner.next();
+                    break;
+                }
+                Some((index_now, c)) if *c == '\\' => {
+                    self.position = *index_now;
+                    self.inner.next();
+                    // 跳过转义字符后的下一个字符
+                    self.inner.next();
+                }
+                Some((index_now, _)) => {
+                    self.position = *index_now;
+                    self.inner.next();
+                }
+                None => {
+                    return Err(ParserError::InvalidToken(start_position, self.position))
+                }
+            }
+        }
+
+        let end_position = self.position;
+
+        Ok((TokenKind::StringLiteral, start_position, end_position))
+    }
+
     // 词法分析主函数
     #[inline]
     pub(crate) fn tokenize(&mut self) -> Result<TokenTable, ParserError> {
@@ -95,15 +125,13 @@ impl<'a> Lexer<'a> {
                             table.push(kind, start, end);
                         }
                         '\'' => {
-                            let (kind, start, end) = (TokenKind::SingleQuotation, *index, *index);
-                            self.position = *index;
                             self.inner.next();
+                            let (kind, start, end) = self.scan_string('\'')?;
                             table.push(kind, start, end);
                         }
                         '"' => {
-                            let (kind, start, end) = (TokenKind::DoubleQuotation, *index, *index);
-                            self.position = *index;
                             self.inner.next();
+                            let (kind, start, end) = self.scan_string('"')?;
                             table.push(kind, start, end);
                         }
                         '\\' => {
@@ -186,7 +214,7 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token::TokenKind;
+    use crate::token::{TokenKind, TokenTable};
 
     #[test]
     fn test_skip_whitespace() {
@@ -194,15 +222,10 @@ mod tests {
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
-            vec![Token{
-                kind: TokenKind::LineBreak,
-                start_position: 4,
-                end_position: 4, 
-            }, Token {
-                kind: TokenKind::StringLiteral,
-                start_position: 8,
-                end_position: 12,
-            }]
+            TokenTable {
+                tokens: vec![TokenKind::LineBreak, TokenKind::Identifier],
+                positions: vec![(4, 4), (8, 12)],
+            }
         );
     }
 
@@ -212,11 +235,10 @@ mod tests {
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
-            vec![Token {
-                kind: TokenKind::Number,
-                start_position: 0,
-                end_position: 4,
-            }]
+            TokenTable {
+                tokens: vec![TokenKind::Number,],
+                positions: vec![(0, 4)],
+            }
         );
     }
 
@@ -226,11 +248,10 @@ mod tests {
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
-            vec![Token {
-                kind: TokenKind::StringLiteral,
-                start_position: 0,
-                end_position: 9,
-            }]
+            TokenTable {
+                tokens: vec![TokenKind::Identifier],
+                positions: vec![(0, 9)],
+            }
         );
     }
 
@@ -238,21 +259,12 @@ mod tests {
     fn test_tokenize_numbers() {
         let mut lexer = Lexer::new("123 456");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 2);
         assert_eq!(
             tokens,
-            vec![
-                Token {
-                    kind: TokenKind::Number,
-                    start_position: 0,
-                    end_position: 2,
-                },
-                Token {
-                    kind: TokenKind::Number,
-                    start_position: 4,
-                    end_position: 6,
-                },
-            ]
+            TokenTable {
+                tokens: vec![TokenKind::Number, TokenKind::Number],
+                positions: vec![(0, 2), (4, 6)],
+            }
         );
     }
 
@@ -260,125 +272,35 @@ mod tests {
     fn test_tokenize_strings() {
         let mut lexer = Lexer::new("hello world");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 2);
         assert_eq!(
             tokens,
-            vec![
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 0,
-                    end_position: 4,
-                },
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 6,
-                    end_position: 10,
-                }
-            ]
+            TokenTable {
+                tokens: vec![TokenKind::Identifier, TokenKind::Identifier],
+                positions: vec![(0, 4), (6, 10)],
+            }
         )
     }
 
     #[test]
     fn test_tokenize_punctuation() {
-        let mut lexer = Lexer::new("(),'\"\\;");
+        let mut lexer = Lexer::new("(),'\"\\;'");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 7);
-        assert_eq!(
-            tokens,
-            vec![
-                Token {
-                    kind: TokenKind::LeftParen,
-                    start_position: 0,
-                    end_position: 0,
-                },
-                Token {
-                    kind: TokenKind::RightParen,
-                    start_position: 1,
-                    end_position: 1,
-                },
-                Token {
-                    kind: TokenKind::Comma,
-                    start_position: 2,
-                    end_position: 2,
-                },
-                Token {
-                    kind: TokenKind::SingleQuotation,
-                    start_position: 3,
-                    end_position: 3,
-                },
-                Token {
-                    kind: TokenKind::DoubleQuotation,
-                    start_position: 4,
-                    end_position: 4,
-                },
-                Token {
-                    kind: TokenKind::BackSlash,
-                    start_position: 5,
-                    end_position: 5,
-                },
-                Token {
-                    kind: TokenKind::Eof,
-                    start_position: 6,
-                    end_position: 6,
-                }
-            ]
-        );
+        assert_eq!(tokens, TokenTable {
+           tokens: vec![TokenKind::LeftParen, TokenKind::RightParen, TokenKind::Comma, TokenKind::StringLiteral],
+           positions: vec![(0, 0), (1, 1), (2, 2), (3, 7)],
+        });
     }
 
     #[test]
     fn test_tokenize_mixed() {
         let mut lexer = Lexer::new("func(123, 'abc');");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 9);
         assert_eq!(
             tokens,
-            vec![
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 0,
-                    end_position: 3,
-                },
-                Token {
-                    kind: TokenKind::LeftParen,
-                    start_position: 4,
-                    end_position: 4,
-                },
-                Token {
-                    kind: TokenKind::Number,
-                    start_position: 5,
-                    end_position: 7,
-                },
-                Token {
-                    kind: TokenKind::Comma,
-                    start_position: 8,
-                    end_position: 8,
-                },
-                Token {
-                    kind: TokenKind::SingleQuotation,
-                    start_position: 10,
-                    end_position: 10,
-                },
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 11,
-                    end_position: 13,
-                },
-                Token {
-                    kind: TokenKind::SingleQuotation,
-                    start_position: 14,
-                    end_position: 14,
-                },
-                Token {
-                    kind: TokenKind::RightParen,
-                    start_position: 15,
-                    end_position: 15,
-                },
-                Token {
-                    kind: TokenKind::Eof,
-                    start_position: 16,
-                    end_position: 16,
-                }
-            ]
+            TokenTable {
+                tokens: vec![TokenKind::Identifier, TokenKind::LeftParen, TokenKind::Number, TokenKind::Comma, TokenKind::StringLiteral, TokenKind::RightParen, TokenKind::Eof],
+                positions: vec![(0, 3), (4, 4), (5, 7), (8, 8), (10, 14), (15, 15), (16, 16)],
+            }
         )
     }
 
@@ -386,76 +308,12 @@ mod tests {
     fn test_tokenize_cmp() {
         let mut lexer = Lexer::new("a > b >= c < d <= e <> f = g");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 13);
         assert_eq!(
             tokens,
-            vec![
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 0,
-                    end_position: 0,
-                },
-                Token {
-                    kind: TokenKind::Greater,
-                    start_position: 2,
-                    end_position: 2,
-                },
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 4,
-                    end_position: 4,
-                },
-                Token {
-                    kind: TokenKind::GreaterEqual,
-                    start_position: 6,
-                    end_position: 7,
-                },
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 9,
-                    end_position: 9,
-                },
-                Token {
-                    kind: TokenKind::Less,
-                    start_position: 11,
-                    end_position: 11,
-                },
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 13,
-                    end_position: 13,
-                },
-                Token {
-                    kind: TokenKind::LessEqual,
-                    start_position: 15,
-                    end_position: 16,
-                },
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 18,
-                    end_position: 18,
-                },
-                Token {
-                    kind: TokenKind::NotEqual,
-                    start_position: 20,
-                    end_position: 21,
-                },
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 23,
-                    end_position: 23,
-                },
-                Token {
-                    kind: TokenKind::Equal,
-                    start_position: 25,
-                    end_position: 25,
-                },
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 27,
-                    end_position: 27,
-                },
-            ]
+            TokenTable {
+                tokens: vec![TokenKind::Identifier, TokenKind::Greater, TokenKind::Identifier, TokenKind::GreaterEqual, TokenKind::Identifier, TokenKind::Less, TokenKind::Identifier, TokenKind::LessEqual, TokenKind::Identifier, TokenKind::NotEqual, TokenKind::Identifier, TokenKind::Equal, TokenKind::Identifier],
+                positions: vec![(0, 0), (2, 2), (4, 4), (6, 7), (9, 9), (11, 11), (13, 13), (15, 16), (18, 18), (20, 21), (23, 23), (25, 25), (27, 27)],
+            }
         )
     }
 
@@ -463,26 +321,12 @@ mod tests {
     fn test_tokenize_unknown() {
         let mut lexer = Lexer::new("@#$");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 3);
         assert_eq!(
             tokens,
-            vec![
-                Token {
-                    kind: TokenKind::Unknown,
-                    start_position: 0,
-                    end_position: 0,
-                },
-                Token {
-                    kind: TokenKind::Unknown,
-                    start_position: 1,
-                    end_position: 1,
-                },
-                Token {
-                    kind: TokenKind::Unknown,
-                    start_position: 2,
-                    end_position: 2,
-                },
-            ]
+            TokenTable {
+                tokens: vec![TokenKind::Unknown, TokenKind::Unknown, TokenKind::Unknown],
+                positions: vec![(0, 0), (1, 1), (2, 2)],
+            }
         )
     }
 
@@ -490,28 +334,23 @@ mod tests {
     fn test_empty_input() {
         let mut lexer = Lexer::new("");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 0);
+        assert_eq!(tokens, 
+        TokenTable {
+                tokens: vec![],
+                positions: vec![],
+            });
     }
 
     #[test]
     fn test_whitespace_handling() {
         let mut lexer = Lexer::new("  hello   world  ");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 2);
         assert_eq!(
             tokens,
-            vec![
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 2,
-                    end_position: 6,
-                },
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    start_position: 10,
-                    end_position: 14,
-                }
-            ]
+            TokenTable {
+                tokens: vec![TokenKind::Identifier, TokenKind::Identifier],
+                positions: vec![(2, 6), (10, 14)],
+            }
         );
     }
 
@@ -519,14 +358,12 @@ mod tests {
     fn test_chinese() {
         let mut lexer = Lexer::new("你好世界");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 1);
         assert_eq!(
             tokens,
-            vec![Token {
-                kind: TokenKind::StringLiteral,
-                start_position: 0,
-                end_position: 9,
-            }]
+            TokenTable {
+                tokens: vec![TokenKind::Identifier],
+                positions: vec![(0, 9)],
+            }
         );
     }
 
@@ -536,11 +373,10 @@ mod tests {
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
-            vec![Token {
-                kind: TokenKind::LineBreak,
-                start_position: 0,
-                end_position: 0,
-            }]
+            TokenTable {
+                tokens: vec![TokenKind::LineBreak],
+                positions: vec![(0, 0)],
+            }
         );
     }
 }

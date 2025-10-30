@@ -32,7 +32,7 @@ pub(crate) struct Token {
     pub(crate) end_position: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct TokenTable {
     pub(crate) tokens: Vec<TokenKind>,
     pub(crate) positions: Vec<(usize, usize)>,

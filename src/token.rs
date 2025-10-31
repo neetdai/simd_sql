@@ -1,6 +1,5 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TokenKind {
-    LineBreak,
     Number,
     StringLiteral,
     Identifier,
@@ -23,13 +22,6 @@ pub(crate) enum TokenKind {
     Multiply,
     Divide,
     Mod,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Token {
-    pub(crate) kind: TokenKind,
-    pub(crate) start_position: usize,
-    pub(crate) end_position: usize,
 }
 
 #[derive(Debug, PartialEq, Eq)]

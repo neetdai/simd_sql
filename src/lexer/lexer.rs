@@ -2,7 +2,7 @@ use std::{iter::Peekable, process::Termination, str::CharIndices};
 
 use crate::{
     error::ParserError,
-    token::{Token, TokenKind, TokenTable},
+    token::{TokenKind, TokenTable},
 };
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl<'a> Lexer<'a> {
     fn skip_whitespace(&mut self) {
         while let Some((index, _)) = self
             .inner
-            .next_if(|(_, c)| *c == ' ' || *c == '\t' || *c == '\r')
+            .next_if(|(_, c)| c.is_whitespace())
         {
             self.position = index;
         }
@@ -146,12 +146,6 @@ impl<'a> Lexer<'a> {
                             self.inner.next();
                             table.push(kind, start, end);
                         }
-                        '\n' => {
-                            let (kind, start, end) = (TokenKind::LineBreak, *index, *index);
-                            self.position = *index;
-                            self.inner.next();
-                            table.push(kind, start, end);
-                        }
                         '>' => {
                             let index_now = *index;
                             self.inner.next();
@@ -223,8 +217,8 @@ mod tests {
         assert_eq!(
             tokens,
             TokenTable {
-                tokens: vec![TokenKind::LineBreak, TokenKind::Identifier],
-                positions: vec![(4, 4), (8, 12)],
+                tokens: vec![TokenKind::Identifier],
+                positions: vec![(8, 12)],
             }
         );
     }
@@ -374,8 +368,8 @@ mod tests {
         assert_eq!(
             tokens,
             TokenTable {
-                tokens: vec![TokenKind::LineBreak],
-                positions: vec![(0, 0)],
+                tokens: vec![],
+                positions: vec![],
             }
         );
     }

@@ -24,10 +24,7 @@ impl<'a> Lexer<'a> {
     // 跳过空白符
     #[inline]
     fn skip_whitespace(&mut self) {
-        while let Some((index, _)) = self
-            .inner
-            .next_if(|(_, c)| c.is_whitespace())
-        {
+        while let Some((index, _)) = self.inner.next_if(|(_, c)| c.is_whitespace()) {
             self.position = index;
         }
     }
@@ -44,7 +41,7 @@ impl<'a> Lexer<'a> {
         Ok((TokenKind::Number, start_position, end_position))
     }
 
-    // 匹配字符串
+    // 匹配字面量
     #[inline]
     fn match_identify(&mut self) -> Result<(TokenKind, usize, usize), ParserError> {
         let start_position = self.position;
@@ -52,15 +49,17 @@ impl<'a> Lexer<'a> {
             self.position = index;
         }
         let end_position = self.position;
-        
+
         Ok((TokenKind::Identifier, start_position, end_position))
     }
 
+    // 匹配字符串
+    #[inline]
     fn scan_string(&mut self, terminator: char) -> Result<(TokenKind, usize, usize), ParserError> {
         let start_position = self.position;
         loop {
             match self.inner.peek() {
-                Some((index_now, c)) if *c == terminator =>  {
+                Some((index_now, c)) if *c == terminator => {
                     self.position = *index_now;
                     self.inner.next();
                     break;
@@ -75,9 +74,7 @@ impl<'a> Lexer<'a> {
                     self.position = *index_now;
                     self.inner.next();
                 }
-                None => {
-                    return Err(ParserError::InvalidToken(start_position, self.position))
-                }
+                None => return Err(ParserError::InvalidToken(start_position, self.position)),
             }
         }
 
@@ -103,7 +100,7 @@ impl<'a> Lexer<'a> {
                             table.push(kind, start, end);
                         }
                         c if c.is_alphabetic() => {
-                            let (kind, start, end)  = self.match_identify()?;
+                            let (kind, start, end) = self.match_identify()?;
                             table.push(kind, start, end);
                         }
                         '(' => {
@@ -150,7 +147,8 @@ impl<'a> Lexer<'a> {
                             let index_now = *index;
                             self.inner.next();
                             if let Some((index_next, _)) = self.inner.next_if(|(_, c)| *c == '=') {
-                                let (kind, start, end) = (TokenKind::GreaterEqual, index_now, index_next);
+                                let (kind, start, end) =
+                                    (TokenKind::GreaterEqual, index_now, index_next);
                                 self.position = index_next;
                                 table.push(kind, start, end);
                             } else {
@@ -165,19 +163,22 @@ impl<'a> Lexer<'a> {
 
                             match self.inner.peek() {
                                 Some((index_next, '>')) => {
-                                    let (kind, start, end) = (TokenKind::NotEqual, index_now, *index_next);
+                                    let (kind, start, end) =
+                                        (TokenKind::NotEqual, index_now, *index_next);
                                     self.position = index_next + 1;
                                     self.inner.next();
                                     table.push(kind, start, end);
                                 }
                                 Some((index_next, '=')) => {
-                                    let (kind, start, end) = (TokenKind::LessEqual, index_now, *index_next);
+                                    let (kind, start, end) =
+                                        (TokenKind::LessEqual, index_now, *index_next);
                                     self.position = index_next + 1;
                                     self.inner.next();
                                     table.push(kind, start, end);
                                 }
                                 _ => {
-                                let (kind, start, end) = (TokenKind::Less, index_now, index_now);
+                                    let (kind, start, end) =
+                                        (TokenKind::Less, index_now, index_now);
                                     self.position = index_now;
                                     table.push(kind, start, end);
                                 }
@@ -279,10 +280,18 @@ mod tests {
     fn test_tokenize_punctuation() {
         let mut lexer = Lexer::new("(),'\"\\;'");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens, TokenTable {
-           tokens: vec![TokenKind::LeftParen, TokenKind::RightParen, TokenKind::Comma, TokenKind::StringLiteral],
-           positions: vec![(0, 0), (1, 1), (2, 2), (3, 7)],
-        });
+        assert_eq!(
+            tokens,
+            TokenTable {
+                tokens: vec![
+                    TokenKind::LeftParen,
+                    TokenKind::RightParen,
+                    TokenKind::Comma,
+                    TokenKind::StringLiteral
+                ],
+                positions: vec![(0, 0), (1, 1), (2, 2), (3, 7)],
+            }
+        );
     }
 
     #[test]
@@ -292,7 +301,15 @@ mod tests {
         assert_eq!(
             tokens,
             TokenTable {
-                tokens: vec![TokenKind::Identifier, TokenKind::LeftParen, TokenKind::Number, TokenKind::Comma, TokenKind::StringLiteral, TokenKind::RightParen, TokenKind::Eof],
+                tokens: vec![
+                    TokenKind::Identifier,
+                    TokenKind::LeftParen,
+                    TokenKind::Number,
+                    TokenKind::Comma,
+                    TokenKind::StringLiteral,
+                    TokenKind::RightParen,
+                    TokenKind::Eof
+                ],
                 positions: vec![(0, 3), (4, 4), (5, 7), (8, 8), (10, 14), (15, 15), (16, 16)],
             }
         )
@@ -305,8 +322,36 @@ mod tests {
         assert_eq!(
             tokens,
             TokenTable {
-                tokens: vec![TokenKind::Identifier, TokenKind::Greater, TokenKind::Identifier, TokenKind::GreaterEqual, TokenKind::Identifier, TokenKind::Less, TokenKind::Identifier, TokenKind::LessEqual, TokenKind::Identifier, TokenKind::NotEqual, TokenKind::Identifier, TokenKind::Equal, TokenKind::Identifier],
-                positions: vec![(0, 0), (2, 2), (4, 4), (6, 7), (9, 9), (11, 11), (13, 13), (15, 16), (18, 18), (20, 21), (23, 23), (25, 25), (27, 27)],
+                tokens: vec![
+                    TokenKind::Identifier,
+                    TokenKind::Greater,
+                    TokenKind::Identifier,
+                    TokenKind::GreaterEqual,
+                    TokenKind::Identifier,
+                    TokenKind::Less,
+                    TokenKind::Identifier,
+                    TokenKind::LessEqual,
+                    TokenKind::Identifier,
+                    TokenKind::NotEqual,
+                    TokenKind::Identifier,
+                    TokenKind::Equal,
+                    TokenKind::Identifier
+                ],
+                positions: vec![
+                    (0, 0),
+                    (2, 2),
+                    (4, 4),
+                    (6, 7),
+                    (9, 9),
+                    (11, 11),
+                    (13, 13),
+                    (15, 16),
+                    (18, 18),
+                    (20, 21),
+                    (23, 23),
+                    (25, 25),
+                    (27, 27)
+                ],
             }
         )
     }
@@ -328,11 +373,13 @@ mod tests {
     fn test_empty_input() {
         let mut lexer = Lexer::new("");
         let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens, 
-        TokenTable {
+        assert_eq!(
+            tokens,
+            TokenTable {
                 tokens: vec![],
                 positions: vec![],
-            });
+            }
+        );
     }
 
     #[test]

@@ -259,6 +259,73 @@ impl<'a> SimdLexer<'a> {
                         table.push(kind, start, end);
                         self.position += 1;
                     }
+                    b'<' => {
+                        match self.inner.get(self.position + 1) {
+                            Some(b'=') => {
+                                table.push(TokenKind::LessEqual, self.position, self.position + 1);
+                                self.position += 2;
+                            }
+                            Some(b'>') => {
+                                table.push(TokenKind::NotEqual, self.position, self.position + 1);
+                                self.position += 2;
+                            }
+                            _ => {
+                                table.push(TokenKind::Less, self.position, self.position);
+                                self.position += 1;
+                            }
+                        }
+                    }
+                    b'>' => {
+                        match self.inner.get(self.position + 1) {
+                            Some(b'=') => {
+                                table.push(TokenKind::GreaterEqual, self.position, self.position + 1);
+                                self.position += 2;
+                            }
+                            _ => {
+                                table.push(TokenKind::Greater, self.position, self.position);
+                                self.position += 1;
+                            }
+                        }
+                    }
+                    b'=' => {
+                        table.push(TokenKind::Equal, self.position, self.position);
+                        self.position += 1;
+                    }
+                    b',' => {
+                        table.push(TokenKind::Comma, self.position, self.position);
+                        self.position += 1;
+                    }
+                    b'+' => {
+                        table.push(TokenKind::Plus, self.position, self.position);
+                        self.position += 1;
+                    }
+                    b'-' => {
+                        match self.inner.get(self.position + 1) {
+                            Some(b'0'..=b'9') => {
+                                let start = self.position;
+                                self.position += 1;
+                                let (kind, _, end) = self.scan_number()?;
+                                table.push(kind, start, end);
+                                self.position += 1;
+                            }
+                            _ => {
+                                table.push(TokenKind::Subtract, self.position, self.position);
+                                self.position += 1;
+                            }
+                        }
+                    }
+                    b'*' => {
+                        table.push(TokenKind::Multiply, self.position, self.position);
+                        self.position += 1;
+                    }
+                    b'/' => {
+                        table.push(TokenKind::Divide, self.position, self.position);
+                        self.position += 1;
+                    }
+                    b'%' => {
+                        table.push(TokenKind::Mod, self.position, self.position);
+                        self.position += 1;
+                    }
                     _ => {
                         todo!()
                     }
@@ -315,6 +382,16 @@ mod tests {
             TokenTable {
                 tokens: vec![TokenKind::Number, TokenKind::Number],
                 positions: vec![(0, 42), (43, 71)],
+            }
+        );
+
+        let mut lexer = SimdLexer::new("-123");
+        let token = lexer.tokenize().unwrap();
+        assert_eq!(
+            token,
+            TokenTable {
+                tokens: vec![TokenKind::Number],
+                positions: vec![(0, 4)],
             }
         );
     }

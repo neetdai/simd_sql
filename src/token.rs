@@ -1,3 +1,5 @@
+use crate::keyword::Keyword;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TokenKind {
     Number,
@@ -6,8 +8,6 @@ pub(crate) enum TokenKind {
     Eof,
     LeftParen,
     RightParen,
-    SingleQuotation,
-    DoubleQuotation,
     BackSlash,
     Comma,
     Unknown,
@@ -22,6 +22,7 @@ pub(crate) enum TokenKind {
     Multiply,
     Divide,
     Mod,
+    Keyword(Keyword),
 }
 
 #[derive(Debug, PartialEq, Eq)]

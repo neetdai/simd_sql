@@ -1,3 +1,5 @@
+use aho_corasick::AhoCorasick;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Keyword {
     Select,

@@ -1,8 +1,9 @@
-use std::{iter::Peekable, process::Termination, str::CharIndices};
+use std::{iter::Peekable, process::Termination, str::{CharIndices, FromStr}};
+
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
 
 use crate::{
-    error::ParserError,
-    token::{TokenKind, TokenTable},
+    error::ParserError, keyword::Keyword, token::{TokenKind, TokenTable}
 };
 
 #[derive(Debug)]
@@ -10,15 +11,23 @@ pub(crate) struct Lexer<'a> {
     inner: Peekable<CharIndices<'a>>,
     text: &'a str,
     position: usize,
+    aho: AhoCorasick,
 }
 
 impl<'a> Lexer<'a> {
-    pub(crate) fn new(text: &'a str) -> Self {
-        Self {
+    pub(crate) fn new(text: &'a str) -> Result<Self, ParserError> {
+        Ok(Self {
             inner: text.char_indices().peekable(),
             text,
             position: 0,
-        }
+            aho: AhoCorasickBuilder::new()
+                .ascii_case_insensitive(true)
+                .match_kind(aho_corasick::MatchKind::Standard)
+                .build(Keyword::all_keywords())
+                .map_err(|e| {
+                    ParserError::AhoCorasickBuild(e.to_string())
+                })?,
+        })
     }
 
     // 跳过空白符
@@ -50,7 +59,27 @@ impl<'a> Lexer<'a> {
         }
         let end_position = self.position;
 
-        Ok((TokenKind::Identifier, start_position, end_position))
+        let source = match self.text.get(start_position..=end_position) {
+            Some(s) => s,
+            None => return Err(ParserError::InvalidToken(start_position, end_position)),
+        };
+
+        if let Some(keyword) = self.maybe_keyword(source) {
+            Ok((TokenKind::Keyword(keyword), start_position, end_position))            
+        } else {
+            Ok((TokenKind::Identifier, start_position, end_position))
+        }
+    }
+
+    // 可能是关键词
+    fn maybe_keyword(&self, source: &str) -> Option<Keyword> {
+        self.aho.find(source)
+            .map(|m| {
+                let index = m.pattern().as_usize();
+                let list = Keyword::all_keywords();
+                let s = list[index];
+                Keyword::from_str(s).unwrap()
+            })
     }
 
     // 匹配字符串
@@ -213,7 +242,7 @@ mod tests {
 
     #[test]
     fn test_skip_whitespace() {
-        let mut lexer = Lexer::new("   \t\n   hello");
+        let mut lexer = Lexer::new("   \t\n   hello").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -226,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_match_number() {
-        let mut lexer = Lexer::new("12345");
+        let mut lexer = Lexer::new("12345").unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -239,7 +268,7 @@ mod tests {
 
     #[test]
     fn test_match_string() {
-        let mut lexer = Lexer::new("helloWorld");
+        let mut lexer = Lexer::new("helloWorld").unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -252,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_tokenize_numbers() {
-        let mut lexer = Lexer::new("123 456");
+        let mut lexer = Lexer::new("123 456").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -265,7 +294,7 @@ mod tests {
 
     #[test]
     fn test_tokenize_strings() {
-        let mut lexer = Lexer::new("hello world");
+        let mut lexer = Lexer::new("hello world").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -278,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_tokenize_punctuation() {
-        let mut lexer = Lexer::new("(),'\"\\;'");
+        let mut lexer = Lexer::new("(),'\"\\;'").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -296,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_tokenize_mixed() {
-        let mut lexer = Lexer::new("func(123, 'abc');");
+        let mut lexer = Lexer::new("func(123, 'abc');").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -317,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_tokenize_cmp() {
-        let mut lexer = Lexer::new("a > b >= c < d <= e <> f = g");
+        let mut lexer = Lexer::new("a > b >= c < d <= e <> f = g").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -358,7 +387,7 @@ mod tests {
 
     #[test]
     fn test_tokenize_unknown() {
-        let mut lexer = Lexer::new("@#$");
+        let mut lexer = Lexer::new("@#$").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -371,7 +400,7 @@ mod tests {
 
     #[test]
     fn test_empty_input() {
-        let mut lexer = Lexer::new("");
+        let mut lexer = Lexer::new("").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -384,7 +413,7 @@ mod tests {
 
     #[test]
     fn test_whitespace_handling() {
-        let mut lexer = Lexer::new("  hello   world  ");
+        let mut lexer = Lexer::new("  hello   world  ").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -397,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_chinese() {
-        let mut lexer = Lexer::new("你好世界");
+        let mut lexer = Lexer::new("你好世界").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -410,13 +439,26 @@ mod tests {
 
     #[test]
     fn test_tokenize_line_break() {
-        let mut lexer = Lexer::new("\n");
+        let mut lexer = Lexer::new("\n").unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
             TokenTable {
                 tokens: vec![],
                 positions: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn test_keyword() {
+        let mut lexer = Lexer::new("select from").unwrap();
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(
+            tokens,
+            TokenTable {
+                tokens: vec![TokenKind::Keyword(Keyword::Select), TokenKind::Keyword(Keyword::From)],
+                positions: vec![(0, 5), (7, 10)],
             }
         );
     }

@@ -1,22 +1,31 @@
-use std::arch::x86_64::*;
+use std::{arch::x86_64::*, str::FromStr};
+
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 
 use crate::{
-    error::ParserError,
-    token::{TokenKind, TokenTable},
+    error::ParserError, keyword::Keyword, token::{TokenKind, TokenTable}
 };
 
 #[derive(Debug)]
 pub(crate) struct SimdLexer<'a> {
     inner: &'a [u8],
     position: usize,
+    aho: AhoCorasick,
 }
 
 impl<'a> SimdLexer<'a> {
-    pub(crate) fn new(text: &'a str) -> Self {
-        Self {
+    pub(crate) fn new(text: &'a str) -> Result<Self, ParserError> {
+        Ok(Self {
             inner: text.as_bytes(),
             position: 0,
-        }
+            aho: AhoCorasickBuilder::new()
+                .ascii_case_insensitive(true)
+                .match_kind(MatchKind::Standard)
+                .build(Keyword::all_keywords())
+                .map_err(|e| {
+                    ParserError::AhoCorasickBuild(e.to_string())
+                })?,
+        })
     }
 
     #[inline]
@@ -168,7 +177,27 @@ impl<'a> SimdLexer<'a> {
         let end = pos;
         self.position = pos;
 
-        Ok((TokenKind::Identifier, start, end))
+        let source = match self.inner.get(start..=end) {
+            Some(s) => s,
+            None => return Err(ParserError::InvalidToken(start, end)),
+        };
+
+        if let Some(keyword) = self.maybe_keyword(source) {
+            Ok((TokenKind::Keyword(keyword), start, end))            
+        } else {
+            Ok((TokenKind::Identifier, start, end))
+        }
+    }
+
+    // 可能是关键词
+    fn maybe_keyword(&self, source: &[u8]) -> Option<Keyword> {
+        self.aho.find(source)
+            .map(|m| {
+                let index = m.pattern().as_usize();
+                let list = Keyword::all_keywords();
+                let s = list[index];
+                Keyword::from_str(s).unwrap()
+            })
     }
 
     // 匹配字符串
@@ -350,7 +379,7 @@ mod tests {
         let mut lexer = SimdLexer::new(
             r#"                 
                 "#,
-        );
+        ).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -363,7 +392,7 @@ mod tests {
 
     #[test]
     fn test_match_number() {
-        let mut lexer = SimdLexer::new("1234567890");
+        let mut lexer = SimdLexer::new("1234567890").unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -375,7 +404,7 @@ mod tests {
 
         let mut lexer = SimdLexer::new(
             "123451111111111111111111111111111111111111 2222222222222222222222222222",
-        );
+        ).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -385,7 +414,7 @@ mod tests {
             }
         );
 
-        let mut lexer = SimdLexer::new("-123");
+        let mut lexer = SimdLexer::new("-123").unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -398,7 +427,7 @@ mod tests {
 
     #[test]
     fn test_match_string() {
-        let mut lexer = SimdLexer::new("'helloWorld'");
+        let mut lexer = SimdLexer::new("'helloWorld'").unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -408,7 +437,7 @@ mod tests {
             }
         );
 
-        let mut lexer = SimdLexer::new(r#"'hello\\'World'"#);
+        let mut lexer = SimdLexer::new(r#"'hello\\'World'"#).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -419,7 +448,7 @@ mod tests {
         );
 
         let mut lexer =
-            SimdLexer::new("'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'");
+            SimdLexer::new("'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'").unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -430,7 +459,7 @@ mod tests {
         );
 
         let mut lexer =
-            SimdLexer::new("\'aaaaaaaaaaaaa\\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\'");
+            SimdLexer::new("\'aaaaaaaaaaaaa\\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\'").unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -443,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_match_indentify() {
-        let mut lexer = SimdLexer::new("asdfghjk");
+        let mut lexer = SimdLexer::new("asdfghjk").unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -453,13 +482,26 @@ mod tests {
             }
         );
 
-        let mut lexer = SimdLexer::new("qwertyuiopASDFGHJKL1234567890_zxcvbnm 1234567890");
+        let mut lexer = SimdLexer::new("qwertyuiopASDFGHJKL1234567890_zxcvbnm 1234567890").unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
             TokenTable {
                 tokens: vec![TokenKind::Identifier, TokenKind::Number],
                 positions: vec![(0, 37), (38, 48)],
+            }
+        );
+    }
+
+    #[test]
+    fn test_keyword() {
+        let mut lexer = SimdLexer::new("select from").unwrap();
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(
+            tokens,
+            TokenTable {
+                tokens: vec![TokenKind::Keyword(Keyword::Select), TokenKind::Keyword(Keyword::From)],
+                positions: vec![(0, 5), (7, 10)],
             }
         );
     }

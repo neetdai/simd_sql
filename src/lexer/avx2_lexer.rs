@@ -184,7 +184,7 @@ impl<'a> SimdLexer<'a> {
     fn maybe_keyword(&self, source: &[u8]) -> Option<Keyword> {
         let len = source.len();
         let tmp = source.iter().copied().map(|c| {
-            if c >= b'a' && c <= b'z' {
+            if c.is_ascii_lowercase() {
                 c - 32
             } else {
                 c

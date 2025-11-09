@@ -69,7 +69,7 @@ impl<'a> Lexer<'a> {
         let tmp = source.chars().map(|c| c.to_ascii_uppercase()).collect::<String>();
         self.keyword_map.get(len)?
             .iter().find(|keyword| {
-                keyword.as_str() == &tmp
+                keyword.as_str() == tmp
             })
             .copied()
     }

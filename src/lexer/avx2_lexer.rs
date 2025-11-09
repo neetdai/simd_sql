@@ -154,7 +154,6 @@ impl<'a> SimdLexer<'a> {
                 pos += 32;
             }
 
-            dbg!(&pos);
             let tmp_pos = pos;
             for index in tmp_pos..length {
                 let c = self.inner.get_unchecked(index);

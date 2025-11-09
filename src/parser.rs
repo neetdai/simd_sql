@@ -1,4 +1,4 @@
-use crate::error::ParserError;
+use crate::{error::ParserError, lexer::{Lexer, SimdLexer}};
 use bumpalo::Bump;
 use simdutf8::basic::from_utf8;
 
@@ -18,6 +18,15 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&self) -> Result<(), ParserError> {
+        let tokentable = {
+            if is_x86_feature_detected!("avx2") {
+                let mut lexer = SimdLexer::new(&self.text)?;
+                lexer.tokenize()?
+            } else {
+                let mut lexer = Lexer::new(&self.text)?;
+                lexer.tokenize()?
+            }
+        };
         Ok(())
     }
 }

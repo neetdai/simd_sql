@@ -211,6 +211,44 @@ impl<'a> Lexer<'a> {
                             self.inner.next();
                             table.push(kind, start, end);
                         }
+                        '+' => {
+                            let (kind, start, end) = (TokenKind::Plus, *index, *index);
+                            self.position = *index;
+                            self.inner.next();
+                            table.push(kind, start, end);
+                        }
+                        '-' => {
+                            let index_now = *index;
+                            self.inner.next();
+                            if let Some((index_next, _)) = self.inner.next_if(|(_, c)| c.is_alphanumeric()) {
+                                let (kind, _, end) = self.match_number()?;
+                                self.position = index_next;
+                                table.push(kind, index_now, end);
+                            } else {
+                                let (kind, start, end) = (TokenKind::Subtract, index_now, index_now);
+                                self.position = index_now;
+                                self.inner.next();
+                                table.push(kind, start, end);
+                            }
+                        }
+                        '*' => {
+                            let (kind, start, end) = (TokenKind::Multiply, *index, *index);
+                            self.position = *index;
+                            self.inner.next();
+                            table.push(kind, start, end);
+                        }
+                        '/' => {
+                            let (kind, start, end) = (TokenKind::Divide, *index, *index);
+                            self.position = *index;
+                            self.inner.next();
+                            table.push(kind, start, end);
+                        }
+                        '%' => {
+                            let (kind, start, end) = (TokenKind::Mod, *index, *index);
+                            self.position = *index;
+                            self.inner.next();
+                            table.push(kind, start, end);
+                        }
                         _ => {
                             let (kind, start, end) = (TokenKind::Unknown, *index, *index);
                             self.position = *index;
@@ -254,6 +292,16 @@ mod tests {
             TokenTable {
                 tokens: vec![TokenKind::Number,],
                 positions: vec![(0, 4)],
+            }
+        );
+
+        let mut lexer = Lexer::new("-12345").unwrap();
+        let token = lexer.tokenize().unwrap();
+        assert_eq!(
+            token,
+            TokenTable {
+                tokens: vec![TokenKind::Number,],
+                positions: vec![(0, 5)],
             }
         );
     }
@@ -438,6 +486,24 @@ mod tests {
             TokenTable {
                 tokens: vec![TokenKind::Keyword(Keyword::Select), TokenKind::Keyword(Keyword::From)],
                 positions: vec![(0, 5), (7, 10)],
+            }
+        );
+    }
+
+    #[test]
+    fn test_sql() {
+        let mut lexer = Lexer::new("select * from a").unwrap();
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(
+            tokens,
+            TokenTable {
+                tokens: vec![
+                    TokenKind::Keyword(Keyword::Select),
+                    TokenKind::Multiply,
+                    TokenKind::Keyword(Keyword::From),
+                    TokenKind::Identifier,
+                ],
+                positions: vec![(0, 5), (7, 7), (9, 12), (14, 14)],
             }
         );
     }

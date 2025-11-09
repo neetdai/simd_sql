@@ -425,6 +425,47 @@ mod tests {
     }
 
     #[test]
+    fn test_tokenize_cmp() {
+        let mut lexer = SimdLexer::new("a > b >= c < d <= e <> f = g").unwrap();
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(
+            tokens,
+            TokenTable {
+                tokens: vec![
+                    TokenKind::Identifier,
+                    TokenKind::Greater,
+                    TokenKind::Identifier,
+                    TokenKind::GreaterEqual,
+                    TokenKind::Identifier,
+                    TokenKind::Less,
+                    TokenKind::Identifier,
+                    TokenKind::LessEqual,
+                    TokenKind::Identifier,
+                    TokenKind::NotEqual,
+                    TokenKind::Identifier,
+                    TokenKind::Equal,
+                    TokenKind::Identifier
+                ],
+                positions: vec![
+                    (0, 0),
+                    (2, 2),
+                    (4, 4),
+                    (6, 7),
+                    (9, 9),
+                    (11, 11),
+                    (13, 13),
+                    (15, 16),
+                    (18, 18),
+                    (20, 21),
+                    (23, 23),
+                    (25, 25),
+                    (27, 27)
+                ],
+            }
+        )
+    }
+
+    #[test]
     fn test_match_string() {
         let mut lexer = SimdLexer::new("'helloWorld'").unwrap();
         let token = lexer.tokenize().unwrap();
@@ -501,6 +542,24 @@ mod tests {
             TokenTable {
                 tokens: vec![TokenKind::Keyword(Keyword::Select), TokenKind::Keyword(Keyword::From)],
                 positions: vec![(0, 5), (7, 10)],
+            }
+        );
+    }
+
+    #[test]
+    fn test_sql() {
+        let mut lexer = SimdLexer::new("select * from a").unwrap();
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(
+            tokens,
+            TokenTable {
+                tokens: vec![
+                    TokenKind::Keyword(Keyword::Select),
+                    TokenKind::Multiply,
+                    TokenKind::Keyword(Keyword::From),
+                    TokenKind::Identifier,
+                ],
+                positions: vec![(0, 5), (7, 7), (9, 12), (14, 14)],
             }
         );
     }

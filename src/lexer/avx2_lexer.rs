@@ -8,15 +8,15 @@ use crate::{
 pub(crate) struct SimdLexer<'a> {
     inner: &'a [u8],
     position: usize,
-    keyword_map: KeywordMap,
+    keyword_map: &'a KeywordMap,
 }
 
 impl<'a> SimdLexer<'a> {
-    pub(crate) fn new(text: &'a str) -> Result<Self, ParserError> {
+    pub(crate) fn new(text: &'a str, keyword_map: &'a KeywordMap) -> Result<Self, ParserError> {
         Ok(Self {
             inner: text.as_bytes(),
             position: 0,
-            keyword_map: KeywordMap::new(),
+            keyword_map,
         })
     }
 
@@ -375,9 +375,11 @@ mod tests {
 
     #[test]
     fn test_skip_whitespace() {
+        let keyword_map = KeywordMap::new();
         let mut lexer = SimdLexer::new(
             r#"                 
                 "#,
+                &keyword_map
         ).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
@@ -391,7 +393,8 @@ mod tests {
 
     #[test]
     fn test_match_number() {
-        let mut lexer = SimdLexer::new("1234567890").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = SimdLexer::new("1234567890", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -403,6 +406,7 @@ mod tests {
 
         let mut lexer = SimdLexer::new(
             "123451111111111111111111111111111111111111 2222222222222222222222222222",
+            &keyword_map
         ).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
@@ -413,7 +417,7 @@ mod tests {
             }
         );
 
-        let mut lexer = SimdLexer::new("-123").unwrap();
+        let mut lexer = SimdLexer::new("-123", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -426,7 +430,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_cmp() {
-        let mut lexer = SimdLexer::new("a > b >= c < d <= e <> f = g").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = SimdLexer::new("a > b >= c < d <= e <> f = g", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -467,7 +472,8 @@ mod tests {
 
     #[test]
     fn test_match_string() {
-        let mut lexer = SimdLexer::new("'helloWorld'").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = SimdLexer::new("'helloWorld'", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -477,7 +483,7 @@ mod tests {
             }
         );
 
-        let mut lexer = SimdLexer::new(r#"'hello\\'World'"#).unwrap();
+        let mut lexer = SimdLexer::new(r#"'hello\\'World'"#, &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -488,7 +494,7 @@ mod tests {
         );
 
         let mut lexer =
-            SimdLexer::new("'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'").unwrap();
+            SimdLexer::new("'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -499,7 +505,7 @@ mod tests {
         );
 
         let mut lexer =
-            SimdLexer::new("\'aaaaaaaaaaaaa\\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\'").unwrap();
+            SimdLexer::new("\'aaaaaaaaaaaaa\\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\'", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -512,7 +518,8 @@ mod tests {
 
     #[test]
     fn test_match_indentify() {
-        let mut lexer = SimdLexer::new("asdfghjk").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = SimdLexer::new("asdfghjk", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -522,7 +529,7 @@ mod tests {
             }
         );
 
-        let mut lexer = SimdLexer::new("qwertyuiopASDFGHJKL1234567890_zxcvbnm 1234567890").unwrap();
+        let mut lexer = SimdLexer::new("qwertyuiopASDFGHJKL1234567890_zxcvbnm 1234567890", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -535,7 +542,8 @@ mod tests {
 
     #[test]
     fn test_keyword() {
-        let mut lexer = SimdLexer::new("select from").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = SimdLexer::new("select from", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -548,7 +556,8 @@ mod tests {
 
     #[test]
     fn test_sql() {
-        let mut lexer = SimdLexer::new("select * from a").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = SimdLexer::new("select * from a", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,

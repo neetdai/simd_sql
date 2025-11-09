@@ -4,10 +4,11 @@ use simd_sql::Parser;
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("sql parser 1", |b| {
+        let parser = Parser::new().unwrap();
         b.iter(|| {
             let sql = "SELECT * FROM table WHERE id = 1";
-            let parser = Parser::new(sql).unwrap();
-            parser.parse().unwrap();
+            
+            parser.parse(&sql).unwrap();
         })
     });
 }

@@ -9,16 +9,16 @@ pub(crate) struct Lexer<'a> {
     inner: Peekable<CharIndices<'a>>,
     text: &'a str,
     position: usize,
-    keyword_map: KeywordMap,
+    keyword_map: &'a KeywordMap,
 }
 
 impl<'a> Lexer<'a> {
-    pub(crate) fn new(text: &'a str) -> Result<Self, ParserError> {
+    pub(crate) fn new(text: &'a str, keyword_map: &'a KeywordMap) -> Result<Self, ParserError> {
         Ok(Self {
             inner: text.char_indices().peekable(),
             text,
             position: 0,
-            keyword_map: KeywordMap::new(),
+            keyword_map,
         })
     }
 
@@ -272,7 +272,8 @@ mod tests {
 
     #[test]
     fn test_skip_whitespace() {
-        let mut lexer = Lexer::new("   \t\n   hello").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("   \t\n   hello", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -285,7 +286,8 @@ mod tests {
 
     #[test]
     fn test_match_number() {
-        let mut lexer = Lexer::new("12345").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("12345", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -295,7 +297,7 @@ mod tests {
             }
         );
 
-        let mut lexer = Lexer::new("-12345").unwrap();
+        let mut lexer = Lexer::new("-12345", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -308,7 +310,8 @@ mod tests {
 
     #[test]
     fn test_match_string() {
-        let mut lexer = Lexer::new("helloWorld").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("helloWorld", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -321,7 +324,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_numbers() {
-        let mut lexer = Lexer::new("123 456").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("123 456", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -334,7 +338,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_strings() {
-        let mut lexer = Lexer::new("hello world").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("hello world", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -347,7 +352,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_punctuation() {
-        let mut lexer = Lexer::new("(),'\"\\;'").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("(),'\"\\;'", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -365,7 +371,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_mixed() {
-        let mut lexer = Lexer::new("func(123, 'abc');").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("func(123, 'abc');", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -386,7 +393,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_cmp() {
-        let mut lexer = Lexer::new("a > b >= c < d <= e <> f = g").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("a > b >= c < d <= e <> f = g", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -427,7 +435,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_unknown() {
-        let mut lexer = Lexer::new("@#$").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("@#$", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -440,7 +449,8 @@ mod tests {
 
     #[test]
     fn test_empty_input() {
-        let mut lexer = Lexer::new("").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -453,7 +463,8 @@ mod tests {
 
     #[test]
     fn test_whitespace_handling() {
-        let mut lexer = Lexer::new("  hello   world  ").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("  hello   world  ", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -466,7 +477,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_line_break() {
-        let mut lexer = Lexer::new("\n").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("\n", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -479,7 +491,8 @@ mod tests {
 
     #[test]
     fn test_keyword() {
-        let mut lexer = Lexer::new("select from").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("select from", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -492,7 +505,8 @@ mod tests {
 
     #[test]
     fn test_sql() {
-        let mut lexer = Lexer::new("select * from a").unwrap();
+        let keyword_map = KeywordMap::new();
+        let mut lexer = Lexer::new("select * from a", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,

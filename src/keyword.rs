@@ -1,4 +1,4 @@
-use aho_corasick::AhoCorasick;
+use std::{collections::BTreeMap};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Keyword {
@@ -90,12 +90,12 @@ impl Keyword {
         }
     }
 
-    pub const fn all_keywords() -> [&'static str; 40] {
+    pub const fn all_keywords() -> [Keyword; 40] {
         [
-            "SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE",
-            "CREATE", "TABLE", "DROP", "ALTER", "ADD", "JOIN", "ON", "AS", "AND", "OR", "NOT",
-            "NULL", "IS", "IN", "LIKE", "ORDER", "BY", "GROUP", "HAVING", "LIMIT", "OFFSET",
-            "DISTINCT", "UNION", "ALL", "EXISTS", "BETWEEN", "CASE", "WHEN", "THEN", "ELSE", "END",
+            Keyword::Select, Keyword::From, Keyword::Where, Keyword::Insert, Keyword::Into, Keyword::Values, Keyword::Update, Keyword::Set, Keyword::Delete,
+            Keyword::Create, Keyword::Table, Keyword::Drop, Keyword::Alter, Keyword::Add, Keyword::Join, Keyword::On, Keyword::As, Keyword::And, Keyword::Or, Keyword::Not,
+            Keyword::Null, Keyword::Is, Keyword::In, Keyword::Like, Keyword::Order, Keyword::By, Keyword::Group, Keyword::Having, Keyword::Limit, Keyword::Offset,
+            Keyword::Distinct, Keyword::Union, Keyword::All, Keyword::Exists, Keyword::Between, Keyword::Case, Keyword::When, Keyword::Then, Keyword::Else, Keyword::End,
         ]
     }
 }
@@ -147,5 +147,32 @@ impl std::str::FromStr for Keyword {
             "END" => Ok(Keyword::End),
             _ => Err(()),
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct KeywordMap {
+    inner: BTreeMap<usize, Vec<Keyword>>,
+}
+
+impl KeywordMap {
+    pub fn new() -> Self {
+        let inner = Keyword::all_keywords().into_iter()
+            .fold(BTreeMap::new(), |mut map, keyword| {
+                let len = keyword.as_str().len();
+                map.entry(len)
+                    .and_modify(|list: &mut Vec<Keyword>| {
+                        list.push(keyword);
+                    })
+                    .or_insert(vec![keyword]);
+                map
+            });
+        Self {
+            inner,
+        }
+    }
+
+    pub fn get(&self, len: usize) -> Option<&Vec<Keyword>> {
+        self.inner.get(&len)
     }
 }

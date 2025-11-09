@@ -1,16 +1,14 @@
 use std::{arch::x86_64::*, str::FromStr};
 
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
-
 use crate::{
-    error::ParserError, keyword::Keyword, token::{TokenKind, TokenTable}
+    error::ParserError, keyword::{Keyword, KeywordMap}, token::{TokenKind, TokenTable}
 };
 
 #[derive(Debug)]
 pub(crate) struct SimdLexer<'a> {
     inner: &'a [u8],
     position: usize,
-    aho: AhoCorasick,
+    keyword_map: KeywordMap,
 }
 
 impl<'a> SimdLexer<'a> {
@@ -18,13 +16,7 @@ impl<'a> SimdLexer<'a> {
         Ok(Self {
             inner: text.as_bytes(),
             position: 0,
-            aho: AhoCorasickBuilder::new()
-                .ascii_case_insensitive(true)
-                .match_kind(MatchKind::Standard)
-                .build(Keyword::all_keywords())
-                .map_err(|e| {
-                    ParserError::AhoCorasickBuild(e.to_string())
-                })?,
+            keyword_map: KeywordMap::new(),
         })
     }
 
@@ -167,7 +159,7 @@ impl<'a> SimdLexer<'a> {
             for index in tmp_pos..length {
                 let c = self.inner.get_unchecked(index);
                 if (*c >= b'0' && *c <= b'9') || (*c >= b'a' && *c <= b'z') || (*c >= b'A' && *c <= b'Z') || *c == b'_' {
-                    pos += 1;
+                    pos = index;
                 } else {
                     break;
                 }
@@ -191,12 +183,20 @@ impl<'a> SimdLexer<'a> {
 
     // 可能是关键词
     fn maybe_keyword(&self, source: &[u8]) -> Option<Keyword> {
-        self.aho.find(source)
-            .map(|m| {
-                let index = m.pattern().as_usize();
-                let list = Keyword::all_keywords();
-                let s = list[index];
-                Keyword::from_str(s).unwrap()
+        let len = source.len();
+        let tmp = source.iter().copied().map(|c| {
+            if c >= b'a' && c <= b'z' {
+                c - 32
+            } else {
+                c
+            }
+        }).collect::<Vec<u8>>();
+        self.keyword_map.get(len)?
+            .iter()
+            .copied()
+            .find(|keyword| {
+                let keyword = keyword.as_str().as_bytes();
+                keyword.iter().copied().zip(tmp.iter().copied()).all(|(a, b)| a == b)
             })
     }
 

@@ -1,9 +1,7 @@
 use std::{iter::Peekable, process::Termination, str::{CharIndices, FromStr}};
 
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder};
-
 use crate::{
-    error::ParserError, keyword::Keyword, token::{TokenKind, TokenTable}
+    error::ParserError, keyword::{Keyword, KeywordMap}, token::{TokenKind, TokenTable}
 };
 
 #[derive(Debug)]
@@ -11,7 +9,7 @@ pub(crate) struct Lexer<'a> {
     inner: Peekable<CharIndices<'a>>,
     text: &'a str,
     position: usize,
-    aho: AhoCorasick,
+    keyword_map: KeywordMap,
 }
 
 impl<'a> Lexer<'a> {
@@ -20,13 +18,7 @@ impl<'a> Lexer<'a> {
             inner: text.char_indices().peekable(),
             text,
             position: 0,
-            aho: AhoCorasickBuilder::new()
-                .ascii_case_insensitive(true)
-                .match_kind(aho_corasick::MatchKind::Standard)
-                .build(Keyword::all_keywords())
-                .map_err(|e| {
-                    ParserError::AhoCorasickBuild(e.to_string())
-                })?,
+            keyword_map: KeywordMap::new(),
         })
     }
 
@@ -73,13 +65,13 @@ impl<'a> Lexer<'a> {
 
     // 可能是关键词
     fn maybe_keyword(&self, source: &str) -> Option<Keyword> {
-        self.aho.find(source)
-            .map(|m| {
-                let index = m.pattern().as_usize();
-                let list = Keyword::all_keywords();
-                let s = list[index];
-                Keyword::from_str(s).unwrap()
+        let len = source.len();
+        let tmp = source.chars().map(|c| c.to_ascii_uppercase()).collect::<String>();
+        self.keyword_map.get(len)?
+            .iter().find(|keyword| {
+                keyword.as_str() == &tmp
             })
+            .copied()
     }
 
     // 匹配字符串

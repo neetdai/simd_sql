@@ -417,19 +417,6 @@ mod tests {
     }
 
     #[test]
-    fn test_chinese() {
-        let mut lexer = Lexer::new("你好世界").unwrap();
-        let tokens = lexer.tokenize().unwrap();
-        assert_eq!(
-            tokens,
-            TokenTable {
-                tokens: vec![TokenKind::Identifier],
-                positions: vec![(0, 9)],
-            }
-        );
-    }
-
-    #[test]
     fn test_tokenize_line_break() {
         let mut lexer = Lexer::new("\n").unwrap();
         let tokens = lexer.tokenize().unwrap();

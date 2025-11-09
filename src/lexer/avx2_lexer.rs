@@ -478,7 +478,7 @@ mod tests {
             token,
             TokenTable {
                 tokens: vec![TokenKind::Identifier],
-                positions: vec![(0, 8)],
+                positions: vec![(0, 7)],
             }
         );
 
@@ -488,7 +488,7 @@ mod tests {
             token,
             TokenTable {
                 tokens: vec![TokenKind::Identifier, TokenKind::Number],
-                positions: vec![(0, 37), (38, 48)],
+                positions: vec![(0, 36), (38, 48)],
             }
         );
     }

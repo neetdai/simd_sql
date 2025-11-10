@@ -6,4 +6,4 @@ mod lexer;
 pub mod parser;
 mod token;
 
-pub use {parser::Parser, error::ParserError};
+pub use {error::ParserError, parser::Parser};

@@ -1,5 +1,5 @@
-mod avx2_lexer;
 mod lexer;
+mod x86_lexer;
 
-pub(crate) use avx2_lexer::SimdLexer;
 pub(crate) use lexer::Lexer;
+pub(crate) use x86_lexer::SimdLexer;

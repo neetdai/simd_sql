@@ -1,4 +1,8 @@
-use crate::{error::ParserError, keyword::KeywordMap, lexer::{Lexer, SimdLexer}};
+use crate::{
+    error::ParserError,
+    keyword::KeywordMap,
+    lexer::{Lexer, SimdLexer},
+};
 use bumpalo::Bump;
 use simdutf8::basic::from_utf8;
 
@@ -10,7 +14,6 @@ pub struct Parser {
 
 impl Parser {
     pub fn new() -> Result<Self, ParserError> {
-        
         Ok(Self {
             arena: Bump::new(),
             keyword_map: KeywordMap::new(),

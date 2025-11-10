@@ -1,7 +1,13 @@
-use std::{iter::Peekable, process::Termination, str::{CharIndices, FromStr}};
+use std::{
+    iter::Peekable,
+    process::Termination,
+    str::{CharIndices, FromStr},
+};
 
 use crate::{
-    error::ParserError, keyword::{Keyword, KeywordMap}, token::{TokenKind, TokenTable}
+    error::ParserError,
+    keyword::{Keyword, KeywordMap},
+    token::{TokenKind, TokenTable},
 };
 
 #[derive(Debug)]
@@ -57,7 +63,7 @@ impl<'a> Lexer<'a> {
         };
 
         if let Some(keyword) = self.maybe_keyword(source) {
-            Ok((TokenKind::Keyword(keyword), start_position, end_position))            
+            Ok((TokenKind::Keyword(keyword), start_position, end_position))
         } else {
             Ok((TokenKind::Identifier, start_position, end_position))
         }
@@ -66,11 +72,14 @@ impl<'a> Lexer<'a> {
     // 可能是关键词
     fn maybe_keyword(&self, source: &str) -> Option<Keyword> {
         let len = source.len();
-        let tmp = source.chars().map(|c| c.to_ascii_uppercase()).collect::<String>();
-        self.keyword_map.get(len)?
-            .iter().find(|keyword| {
-                keyword.as_str() == tmp
-            })
+        let tmp = source
+            .chars()
+            .map(|c| c.to_ascii_uppercase())
+            .collect::<String>();
+        self.keyword_map
+            .get(len)?
+            .iter()
+            .find(|keyword| keyword.as_str() == tmp)
             .copied()
     }
 
@@ -220,12 +229,15 @@ impl<'a> Lexer<'a> {
                         '-' => {
                             let index_now = *index;
                             self.inner.next();
-                            if let Some((index_next, _)) = self.inner.next_if(|(_, c)| c.is_alphanumeric()) {
+                            if let Some((index_next, _)) =
+                                self.inner.next_if(|(_, c)| c.is_alphanumeric())
+                            {
                                 let (kind, _, end) = self.match_number()?;
                                 self.position = index_next;
                                 table.push(kind, index_now, end);
                             } else {
-                                let (kind, start, end) = (TokenKind::Subtract, index_now, index_now);
+                                let (kind, start, end) =
+                                    (TokenKind::Subtract, index_now, index_now);
                                 self.position = index_now;
                                 self.inner.next();
                                 table.push(kind, start, end);
@@ -497,7 +509,10 @@ mod tests {
         assert_eq!(
             tokens,
             TokenTable {
-                tokens: vec![TokenKind::Keyword(Keyword::Select), TokenKind::Keyword(Keyword::From)],
+                tokens: vec![
+                    TokenKind::Keyword(Keyword::Select),
+                    TokenKind::Keyword(Keyword::From)
+                ],
                 positions: vec![(0, 5), (7, 10)],
             }
         );

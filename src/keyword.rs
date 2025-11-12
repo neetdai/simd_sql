@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use minivec::{MiniVec, mini_vec};
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Keyword {
     Select,
@@ -188,27 +190,24 @@ impl std::str::FromStr for Keyword {
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct KeywordMap {
-    inner: BTreeMap<usize, Vec<Keyword>>,
+    inner: [MiniVec<Keyword>; 7],
 }
 
 impl KeywordMap {
     pub fn new() -> Self {
-        let inner =
-            Keyword::all_keywords()
-                .into_iter()
-                .fold(BTreeMap::new(), |mut map, keyword| {
-                    let len = keyword.as_str().len();
-                    map.entry(len)
-                        .and_modify(|list: &mut Vec<Keyword>| {
-                            list.push(keyword);
-                        })
-                        .or_insert(vec![keyword]);
-                    map
-                });
+        let inner = [
+            mini_vec![],
+            mini_vec![],
+            mini_vec![Keyword::As, Keyword::By, Keyword::In, Keyword::Is, Keyword::Or, Keyword::On, ],
+            mini_vec![Keyword::Add, Keyword::Not, Keyword::End, Keyword::All, Keyword::Set],
+            mini_vec![Keyword::Join, Keyword::Like,  Keyword::Null, Keyword::Drop, Keyword::From, Keyword::Into,],
+            mini_vec![Keyword::Alter, Keyword::Create, Keyword::Group,  Keyword::Order, Keyword::Table, Keyword::Union, Keyword::Where],
+            mini_vec![Keyword::Select, Keyword::Delete, Keyword::Update, Keyword::Values, Keyword::Exists, Keyword::Having, Keyword::Limit],
+        ];
         Self { inner }
     }
 
-    pub fn get(&self, len: usize) -> Option<&Vec<Keyword>> {
-        self.inner.get(&len)
+    pub fn get(&self, len: usize) -> Option<&MiniVec<Keyword>> {
+        self.inner.get(len)
     }
 }

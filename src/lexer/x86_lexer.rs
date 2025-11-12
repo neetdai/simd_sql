@@ -1,4 +1,6 @@
-use std::{arch::x86_64::*, path::is_separator, str::FromStr};
+use std::{arch::x86_64::*, path::is_separator, simd::{Simd, cmp::SimdPartialOrd}, str::FromStr};
+
+use minivec::MiniVec;
 
 use crate::{
     error::ParserError,
@@ -279,19 +281,83 @@ impl<'a> SimdLexer<'a> {
     // 可能是关键词
     fn maybe_keyword(&self, source: &[u8]) -> Option<Keyword> {
         let len = source.len();
-        let tmp = source
+        let list = self.keyword_map.get(len)?;
+        
+        if is_x86_feature_detected!("sse4.2") {
+            // let mut source_array = [0u8; 16];
+            // source_array[0..len].copy_from_slice(source);
+
+            // let source_chunk = Simd::from_array(source_array);
+            // let lower_mask = source_chunk.simd_gt(Simd::<u8, 16>::splat(b'a' - 1)) & source_chunk.simd_lt(Simd::<u8, 16>::splat(b'z' + 1));
+            // let lower_mask = lower_mask.to_int();
+            // let upper = lower_mask ^ Simd::<u8, 16>::splat(32);
+
+            // let upper_source = lower_mask ^ source_chunk | upper;
+
+            // for keyword in list.iter() {
+            //     let key_len = keyword.as_str().as_bytes().len();
+            //     let mut keyword_array = [0u8; 16];
+            //     keyword_array[0..key_len].copy_from_slice(keyword.as_str().as_bytes());
+
+            //     let keyword_chunk = Simd::from_array(keyword_array);
+            //     if keyword_chunk.simd_eq(upper_source).all() {
+            //         return Some(keyword.clone());
+            //     }
+            // }
+            // None
+
+            unsafe {
+                let mut source_array = [0u8; 16];
+                source_array[0..len].copy_from_slice(source);
+
+                let source_ptr = source_array.as_ptr() as *const __m128i;
+                let source_vec = _mm_loadu_si128(source_ptr);
+
+                    // 将小写字母转换为大写
+                let a_minus1 = _mm_set1_epi8(b'a' as i8 - 1);
+                let z_plus1 = _mm_set1_epi8(b'z' as i8 + 1);
+                let is_lowercase = _mm_and_si128(
+                    _mm_cmpgt_epi8(source_vec, a_minus1),
+                    _mm_cmplt_epi8(source_vec, z_plus1)
+                );
+                
+                // 小写转大写：减去32
+                let case_offset = _mm_set1_epi8(32);
+                let source_upper = _mm_sub_epi8(
+                    source_vec, 
+                    _mm_and_si128(is_lowercase, case_offset)
+                );
+
+                for keyword in list.iter() {
+                    let key_len = keyword.as_str().as_bytes().len();
+                    let mut keyword_array = [0u8; 16];
+                    keyword_array[0..key_len].copy_from_slice(keyword.as_str().as_bytes());
+
+                    let keyword_ptr = keyword_array.as_ptr() as *const __m128i;
+                    let keyword_chunk = _mm_loadu_si128(keyword_ptr);
+
+                    let cmp = _mm_cmpeq_epi8(source_upper, keyword_chunk);
+                    let mask = _mm_movemask_epi8(cmp);
+
+                    // dbg!(&mask);
+                    if mask == 0xffff {
+                        return Some(*keyword);
+                    }
+                }
+                return None;
+            }
+        } else {
+            let tmp = source
             .iter()
             .copied()
             .map(|c| if c.is_ascii_lowercase() { c - 32 } else { c })
-            .collect::<Vec<u8>>();
-        self.keyword_map.get(len)?.iter().copied().find(|keyword| {
-            let keyword = keyword.as_str().as_bytes();
-            keyword
-                .iter()
+            .collect::<MiniVec<u8>>();
+            list.iter()
                 .copied()
-                .zip(tmp.iter().copied())
-                .all(|(a, b)| a == b)
-        })
+                .find(|keyword|  {
+                    keyword.as_str().as_bytes() == tmp.as_slice()
+                })
+        }
     }
 
     // 匹配字符串

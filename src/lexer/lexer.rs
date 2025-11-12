@@ -79,7 +79,11 @@ impl<'a> Lexer<'a> {
         self.keyword_map
             .get(len)?
             .iter()
-            .find(|keyword| keyword.as_str() == tmp)
+            .find(|keyword| {
+                dbg!(&keyword.as_str());
+                dbg!(&tmp.as_str());
+                keyword.as_str() == tmp.as_str()
+            })
             .copied()
     }
 

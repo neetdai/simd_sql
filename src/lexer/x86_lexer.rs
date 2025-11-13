@@ -1,4 +1,9 @@
-use std::{arch::x86_64::*, path::is_separator, simd::{Simd, cmp::SimdPartialOrd}, str::FromStr};
+use std::{
+    arch::x86_64::*,
+    path::is_separator,
+    simd::{Simd, cmp::{SimdPartialEq, SimdPartialOrd}},
+    str::FromStr,
+};
 
 use minivec::MiniVec;
 
@@ -28,69 +33,52 @@ impl<'a> SimdLexer<'a> {
     fn skip_whitespace(&mut self) {
         let length = self.inner.len();
         let mut pos = self.position;
-        unsafe {
-            if is_x86_feature_detected!("avx2") {
-                while pos + 32 < length {
-                    let chunk_ptr = self.inner.as_ptr().add(self.position).cast::<i8>();
-                    let slice = _mm256_loadu_epi8(chunk_ptr);
+        if is_x86_feature_detected!("avx2") {
+            while pos + 32 < length {
+                let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos+32]);
 
-                    let space = _mm256_set1_epi8(b' '.cast_signed());
-                    let tab = _mm256_set1_epi8(b'\t'.cast_signed());
-                    let cr = _mm256_set1_epi8(b'\r'.cast_signed());
-                    let change_line = _mm256_set1_epi8(b'\n'.cast_signed());
+                let space = Simd::<u8, 32>::splat(b' ');
+                let tab = Simd::<u8, 32>::splat(b'\t');
+                let newline = Simd::<u8, 32>::splat(b'\n');
+                let cr = Simd::<u8, 32>::splat(b'\r');
 
-                    let is_space = _mm256_cmpeq_epi8(slice, space);
-                    let is_tab = _mm256_cmpeq_epi8(slice, tab);
-                    let is_cr = _mm256_cmpeq_epi8(slice, cr);
-                    let is_change_line = _mm256_cmpeq_epi8(slice, change_line);
-
-                    let whitespace_mask = _mm256_or_si256(
-                        _mm256_or_si256(is_space, is_tab),
-                        _mm256_or_si256(is_cr, is_change_line),
-                    );
-
-                    // 检查是否所有字符都是空白
-                    let mask = _mm256_movemask_epi8(whitespace_mask);
-
-                    if mask != -1 {
-                        // 不是所有字符都是空白
-                        let trailing_zeros = (!mask).trailing_zeros() as usize;
-                        pos += trailing_zeros;
-                        break;
-                    }
-
+                let mask = slice.simd_eq(space) | slice.simd_eq(tab) | slice.simd_eq(newline) | slice.simd_eq(cr);
+                if mask.all() {
                     pos += 32;
+                } else {
+                    let result = (!mask).to_bitmask();
+                    let index = result.trailing_zeros() as usize;
+                    pos += index;
+
+                    break;
                 }
             }
 
             if is_x86_feature_detected!("sse4.2") {
                 while pos + 16 < length {
-                    let chunk_ptr = self.inner.as_ptr().add(pos).cast::<__m128i>();
-                    let slice = _mm_loadu_si128(chunk_ptr);
+                    let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos+16]);
 
-                    let is_space = _mm_cmpeq_epi8(slice,_mm_set1_epi8(b' '.cast_signed()));
-                    let is_tab = _mm_cmpeq_epi8(slice, _mm_set1_epi8(b'\t'.cast_signed()));
-                    let is_cr = _mm_cmpeq_epi8(slice, _mm_set1_epi8(b'\r'.cast_signed()));
-                    let is_change_line = _mm_cmpeq_epi8(slice, _mm_set1_epi8(b'\n'.cast_signed()));
+                    let space = Simd::<u8, 16>::splat(b' ');
+                    let tab = Simd::<u8, 16>::splat(b'\t');
+                    let newline = Simd::<u8, 16>::splat(b'\n');
+                    let cr = Simd::<u8, 16>::splat(b'\r');
 
-                    let mask = _mm_movemask_epi8(_mm_or_si128(
-                        _mm_or_si128(is_space, is_tab),
-                        _mm_or_si128(is_cr, is_change_line),
-                    ));
-
-                    if mask != i32::MAX {
-                        let trailing_zeros = (!mask).trailing_zeros() as usize;
-                        pos += trailing_zeros;
-                        break;
-                    } else {
+                    let mask = slice.simd_eq(space) | slice.simd_eq(tab) | slice.simd_eq(newline) | slice.simd_eq(cr);
+                    if mask.all() {
                         pos += 16;
+                    } else {
+                        let result = (!mask).to_bitmask();
+                        let index = result.trailing_zeros() as usize;
+                        pos += index;
+
+                        break;
                     }
                 }
             }
 
             let tmp_pos = pos;
             for index in tmp_pos..length {
-                let c = self.inner.get_unchecked(index);
+                let c = &self.inner[index];
                 if *c != b' ' && *c != b'\t' && *c != b'\r' && *c != b'\n' {
                     break;
                 }
@@ -106,62 +94,55 @@ impl<'a> SimdLexer<'a> {
         let mut pos = start;
         let length = self.inner.len();
 
-        unsafe {
             if is_x86_feature_detected!("avx2") {
                 while pos + 32 < length {
-                    let chunk_ptr = self.inner.as_ptr().add(pos).cast::<i8>();
-                    let slice = _mm256_loadu_epi8(chunk_ptr);
+                    let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos+32]);
 
-                    let min = _mm256_set1_epi8((b'0' - 1).cast_signed());
-                    let max = _mm256_set1_epi8((b'9' + 1).cast_signed());
+                    let min = Simd::<u8, 32>::splat(b'0' - 1);
+                    let max = Simd::<u8, 32>::splat(b'9' + 1);
+                    let mask = slice.simd_gt(min) & slice.simd_lt(max);
 
-                    let min_mask = _mm256_cmpgt_epi8(slice, min);
-                    let max_mask = _mm256_cmpgt_epi8(max, slice);
-
-                    let cmp = _mm256_and_si256(min_mask, max_mask);
-                    let mask = _mm256_movemask_epi8(cmp);
-
-                    if mask != 0 {
-                        let trailling_zeros = mask.trailing_zeros();
-                        pos += trailling_zeros as usize;
+                    if mask.all() {
+                        pos += 32;
+                    } else {
+                        let result = mask.to_bitmask();
+                        let index = result.trailing_zeros() as usize;
+                        pos += index;
                         break;
                     }
-                    pos += 32;
                 }
             }
 
             if is_x86_feature_detected!("sse4.2") {
                 while pos + 16 < length {
-                    let chunk_ptr = self.inner.as_ptr().add(pos).cast::<__m128i>();
-                    let slice = _mm_loadu_si128(chunk_ptr);
 
-                    let min = _mm_set1_epi8((b'0' - 1).cast_signed());
-                    let max = _mm_set1_epi8((b'9' + 1).cast_signed());
+                    let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos+16]);
 
-                    let mask = _mm_movemask_epi8(_mm_and_si128(
-                        _mm_cmpgt_epi8(slice, min),
-                        _mm_cmpgt_epi8(max, slice),
-                    ));
+                    let min = Simd::<u8, 16>::splat(b'0' - 1);
+                    let max = Simd::<u8, 16>::splat(b'9' + 1);
 
-                    if mask != 0 {
-                        let trailling_zeros = mask.trailing_zeros();
+                    let mask = slice.simd_ge(min) & slice.simd_le(max);
+
+                    if mask.all() {
+                        pos += 16;                        
+                    } else {
+                        let result = mask.to_bitmask();
+                        let trailling_zeros = result.trailing_zeros();
                         pos += trailling_zeros as usize;
                         break;
-                    } else {
-                        pos += 16;
                     }
                 }
             }
 
             let tmp_pos = pos;
             for index in tmp_pos..length {
-                let c = self.inner.get_unchecked(index);
-                if *c < b'0' || *c > b'9' {
+                let c = &self.inner[index];
+                if !c.is_ascii_digit() {
                     break;
                 }
                 pos += 1;
             }
-        }
+        
         self.position = pos;
         let end = pos;
 
@@ -174,94 +155,60 @@ impl<'a> SimdLexer<'a> {
         let mut pos = self.position;
         let length = self.inner.len();
 
-        unsafe {
             if is_x86_feature_detected!("avx2") {
                 while pos + 32 < length {
-                    let chunk_ptr = self.inner.as_ptr().add(pos).cast::<i8>();
-                    let slice = _mm256_loadu_epi8(chunk_ptr);
+                    let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos+32]);
 
-                    let is_digit = _mm256_and_si256(
-                        _mm256_cmpgt_epi8(slice, _mm256_set1_epi8((b'0' - 1).cast_signed())),
-                        _mm256_cmpgt_epi8(_mm256_set1_epi8((b'9' + 1).cast_signed()), slice),
-                    );
+                    let digit_mask = slice.simd_ge(Simd::splat(b'0' - 1)) & slice.simd_le(Simd::splat(b'9' + 1));
+                    let lower_mask = slice.simd_ge(Simd::splat(b'a' - 1)) & slice.simd_le(Simd::splat(b'z' + 1));
+                    let upper_mask = slice.simd_ge(Simd::splat(b'A' - 1)) & slice.simd_le(Simd::splat(b'Z' + 1));
+                    let underline_mask = slice.simd_eq(Simd::splat(b'_'));
 
-                    let is_lower = _mm256_and_si256(
-                        _mm256_cmpgt_epi16(slice, _mm256_set1_epi8((b'a' - 1).cast_signed())),
-                        _mm256_cmpgt_epi16(_mm256_set1_epi8((b'z' + 1).cast_signed()), slice),
-                    );
+                    let mask = digit_mask | lower_mask | upper_mask | underline_mask;
 
-                    let is_upper = _mm256_and_si256(
-                        _mm256_cmpgt_epi8(slice, _mm256_set1_epi8((b'A' - 1).cast_signed())),
-                        _mm256_cmpgt_epi8(_mm256_set1_epi8((b'Z' + 1).cast_signed()), slice),
-                    );
-
-                    let is_underline =
-                        _mm256_cmpeq_epi8(slice, _mm256_set1_epi8(b'_'.cast_signed()));
-
-                    let mask = _mm256_movemask_epi8(_mm256_or_si256(
-                        _mm256_or_si256(is_digit, is_underline),
-                        _mm256_or_si256(is_lower, is_upper),
-                    ));
-
-                    if mask != -1 {
-                        let trailling_zeros = mask.trailing_zeros();
+                    if mask.all() {
+                        pos += 32;
+                    } else {
+                        let result = mask.to_bitmask();
+                        let trailling_zeros = result.trailing_zeros();
                         pos += trailling_zeros as usize;
                         break;
                     }
-                    pos += 32;
                 }
             }
 
             if is_x86_feature_detected!("sse4.2") {
                 while pos + 16 < length {
-                    let chunk_ptr = self.inner.as_ptr().add(pos).cast::<__m128i>();
-                    let slice = _mm_loadu_si128(chunk_ptr);
+                    let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos+16]);
 
-                    let is_digit = _mm_and_si128(
-                        _mm_cmpgt_epi8(slice, _mm_set1_epi8((b'0' - 1).cast_signed())),
-                        _mm_cmpgt_epi8(_mm_set1_epi8((b'9' + 1).cast_signed()), slice),
-                    );
+                    let digit_mask = slice.simd_ge(Simd::splat(b'0' - 1)) & slice.simd_le(Simd::splat(b'9' + 1));
+                    let lower_mask = slice.simd_ge(Simd::splat(b'a' - 1)) & slice.simd_le(Simd::splat(b'z' + 1));
+                    let upper_mask = slice.simd_ge(Simd::splat(b'A' - 1)) & slice.simd_le(Simd::splat(b'Z' + 1));
+                    let underline_mask = slice.simd_eq(Simd::splat(b'_'));
 
-                    let is_lower = _mm_and_si128(
-                        _mm_cmpgt_epi8(slice, _mm_set1_epi8((b'a' - 1).cast_signed())),
-                        _mm_cmpgt_epi8(_mm_set1_epi8((b'z' + 1).cast_signed()), slice),
-                    );
+                    let mask = digit_mask | lower_mask | upper_mask | underline_mask;
 
-                    let is_upper = _mm_and_si128(
-                        _mm_cmpgt_epi8(slice, _mm_set1_epi8((b'A' - 1).cast_signed())),
-                        _mm_cmpgt_epi8(_mm_set1_epi8((b'Z' + 1).cast_signed()), slice),
-                    );
-
-                    let is_underline = _mm_cmpeq_epi8(slice, _mm_set1_epi8(b'_'.cast_signed()));
-
-                    let mask = _mm_movemask_epi8(_mm_or_si128(
-                        _mm_or_si128(is_digit, is_lower),
-                        _mm_or_si128(is_upper, is_underline),
-                    ));
-
-                    if mask != 0 {
-                        let trailling_zeros = mask.trailing_zeros();
+                    if mask.all() {
+                        pos += 16;
+                    } else {
+                        let result = mask.to_bitmask();
+                        let trailling_zeros = result.trailing_zeros();
                         pos += trailling_zeros as usize;
                         break;
                     }
-                    pos += 16;
                 }
             }
 
             let tmp_pos = pos;
             for index in tmp_pos..length {
-                let c = self.inner.get_unchecked(index);
-                if (*c >= b'0' && *c <= b'9')
-                    || (*c >= b'a' && *c <= b'z')
-                    || (*c >= b'A' && *c <= b'Z')
-                    || *c == b'_'
-                {
+                let c = &self.inner[index];
+                if c.is_ascii_alphanumeric() || c == &b'_' {
                     pos = index;
                 } else {
                     break;
                 }
             }
-        }
+        
 
         let end = pos;
         self.position = pos;
@@ -282,81 +229,35 @@ impl<'a> SimdLexer<'a> {
     fn maybe_keyword(&self, source: &[u8]) -> Option<Keyword> {
         let len = source.len();
         let list = self.keyword_map.get(len)?;
-        
+
         if is_x86_feature_detected!("sse4.2") {
-            // let mut source_array = [0u8; 16];
-            // source_array[0..len].copy_from_slice(source);
+            let mut source_array = [0u8; 16];
+            source_array[0..len].copy_from_slice(source);
 
-            // let source_chunk = Simd::from_array(source_array);
-            // let lower_mask = source_chunk.simd_gt(Simd::<u8, 16>::splat(b'a' - 1)) & source_chunk.simd_lt(Simd::<u8, 16>::splat(b'z' + 1));
-            // let lower_mask = lower_mask.to_int();
-            // let upper = lower_mask ^ Simd::<u8, 16>::splat(32);
+            let source_chunk = Simd::from_array(source_array);
+            let lower_mask = source_chunk.simd_gt(Simd::<u8, 16>::splat(b'a' - 1)) & source_chunk.simd_lt(Simd::<u8, 16>::splat(b'z' + 1));
 
-            // let upper_source = lower_mask ^ source_chunk | upper;
+            let source_upper = source_chunk - (lower_mask.select(Simd::<u8, 16>::splat(32), Simd::<u8, 16>::splat(0)));
 
-            // for keyword in list.iter() {
-            //     let key_len = keyword.as_str().as_bytes().len();
-            //     let mut keyword_array = [0u8; 16];
-            //     keyword_array[0..key_len].copy_from_slice(keyword.as_str().as_bytes());
-
-            //     let keyword_chunk = Simd::from_array(keyword_array);
-            //     if keyword_chunk.simd_eq(upper_source).all() {
-            //         return Some(keyword.clone());
-            //     }
-            // }
-            // None
-
-            unsafe {
-                let mut source_array = [0u8; 16];
-                source_array[0..len].copy_from_slice(source);
-
-                let source_ptr = source_array.as_ptr() as *const __m128i;
-                let source_vec = _mm_loadu_si128(source_ptr);
-
-                    // 将小写字母转换为大写
-                let a_minus1 = _mm_set1_epi8(b'a' as i8 - 1);
-                let z_plus1 = _mm_set1_epi8(b'z' as i8 + 1);
-                let is_lowercase = _mm_and_si128(
-                    _mm_cmpgt_epi8(source_vec, a_minus1),
-                    _mm_cmplt_epi8(source_vec, z_plus1)
-                );
-                
-                // 小写转大写：减去32
-                let case_offset = _mm_set1_epi8(32);
-                let source_upper = _mm_sub_epi8(
-                    source_vec, 
-                    _mm_and_si128(is_lowercase, case_offset)
-                );
-
-                for keyword in list.iter() {
-                    let key_len = keyword.as_str().as_bytes().len();
-                    let mut keyword_array = [0u8; 16];
-                    keyword_array[0..key_len].copy_from_slice(keyword.as_str().as_bytes());
-
-                    let keyword_ptr = keyword_array.as_ptr() as *const __m128i;
-                    let keyword_chunk = _mm_loadu_si128(keyword_ptr);
-
-                    let cmp = _mm_cmpeq_epi8(source_upper, keyword_chunk);
-                    let mask = _mm_movemask_epi8(cmp);
-
-                    // dbg!(&mask);
-                    if mask == 0xffff {
-                        return Some(*keyword);
-                    }
+            for keyword in list.iter() {
+                let key_len = keyword.as_str().as_bytes().len();
+                let mut keyword_array = [0u8; 16];
+                keyword_array[0..key_len].copy_from_slice(keyword.as_str().as_bytes());
+                let keyword_chunk = Simd::from_array(keyword_array);
+                if keyword_chunk.simd_eq(source_upper).all() {
+                    return Some(*keyword);
                 }
-                return None;
             }
+            None
         } else {
             let tmp = source
-            .iter()
-            .copied()
-            .map(|c| if c.is_ascii_lowercase() { c - 32 } else { c })
-            .collect::<MiniVec<u8>>();
+                .iter()
+                .copied()
+                .map(|c| if c.is_ascii_lowercase() { c - 32 } else { c })
+                .collect::<MiniVec<u8>>();
             list.iter()
                 .copied()
-                .find(|keyword|  {
-                    keyword.as_str().as_bytes() == tmp.as_slice()
-                })
+                .find(|keyword| keyword.as_str().as_bytes() == tmp.as_slice())
         }
     }
 
@@ -442,107 +343,105 @@ impl<'a> SimdLexer<'a> {
         loop {
             self.skip_whitespace();
 
-            match self.inner.get(self.position) {
-                Some(c) => match *c {
-                    b'(' => {
-                        let (kind, start, end) =
-                            (TokenKind::LeftParen, self.position, self.position);
+            let c = match self.inner.get(self.position) {
+                Some(c) => *c,
+                None => break,
+            };
+
+            match c {
+                b'(' => {
+                    let (kind, start, end) = (TokenKind::LeftParen, self.position, self.position);
+                    table.push(kind, start, end);
+                    self.position += 1;
+                }
+                b')' => {
+                    let (kind, start, end) = (TokenKind::RightParen, self.position, self.position);
+                    table.push(kind, start, end);
+                    self.position += 1;
+                }
+                b'\'' => {
+                    let (kind, start, end) = self.scan_string(b'\'')?;
+                    table.push(kind, start, end);
+                    self.position += 1;
+                }
+                b'"' => {
+                    let (kind, start, end) = self.scan_string(b'"')?;
+                    table.push(kind, start, end);
+                    self.position += 1;
+                }
+                b'a'..=b'z' | b'A'..=b'Z' => {
+                    let (kind, start, end) = self.scan_identify()?;
+                    table.push(kind, start, end);
+                    self.position += 1;
+                }
+                b'0'..=b'9' => {
+                    let (kind, start, end) = self.scan_number()?;
+                    table.push(kind, start, end);
+                    self.position += 1;
+                }
+                b'<' => match self.inner.get(self.position + 1) {
+                    Some(b'=') => {
+                        table.push(TokenKind::LessEqual, self.position, self.position + 1);
+                        self.position += 2;
+                    }
+                    Some(b'>') => {
+                        table.push(TokenKind::NotEqual, self.position, self.position + 1);
+                        self.position += 2;
+                    }
+                    _ => {
+                        table.push(TokenKind::Less, self.position, self.position);
+                        self.position += 1;
+                    }
+                },
+                b'>' => match self.inner.get(self.position + 1) {
+                    Some(b'=') => {
+                        table.push(TokenKind::GreaterEqual, self.position, self.position + 1);
+                        self.position += 2;
+                    }
+                    _ => {
+                        table.push(TokenKind::Greater, self.position, self.position);
+                        self.position += 1;
+                    }
+                },
+                b'=' => {
+                    table.push(TokenKind::Equal, self.position, self.position);
+                    self.position += 1;
+                }
+                b',' => {
+                    table.push(TokenKind::Comma, self.position, self.position);
+                    self.position += 1;
+                }
+                b'+' => {
+                    table.push(TokenKind::Plus, self.position, self.position);
+                    self.position += 1;
+                }
+                b'-' => match self.inner.get(self.position + 1) {
+                    Some(b'0'..=b'9') => {
+                        let start = self.position;
+                        self.position += 1;
+                        let (kind, _, end) = self.scan_number()?;
                         table.push(kind, start, end);
-                        self.position += 1;
-                    }
-                    b')' => {
-                        let (kind, start, end) =
-                            (TokenKind::RightParen, self.position, self.position);
-                        table.push(kind, start, end);
-                        self.position += 1;
-                    }
-                    b'\'' => {
-                        let (kind, start, end) = self.scan_string(b'\'')?;
-                        table.push(kind, start, end);
-                        self.position += 1;
-                    }
-                    b'"' => {
-                        let (kind, start, end) = self.scan_string(b'"')?;
-                        table.push(kind, start, end);
-                        self.position += 1;
-                    }
-                    b'a'..=b'z' | b'A'..=b'Z' => {
-                        let (kind, start, end) = self.scan_identify()?;
-                        table.push(kind, start, end);
-                        self.position += 1;
-                    }
-                    b'0'..=b'9' => {
-                        let (kind, start, end) = self.scan_number()?;
-                        table.push(kind, start, end);
-                        self.position += 1;
-                    }
-                    b'<' => match self.inner.get(self.position + 1) {
-                        Some(b'=') => {
-                            table.push(TokenKind::LessEqual, self.position, self.position + 1);
-                            self.position += 2;
-                        }
-                        Some(b'>') => {
-                            table.push(TokenKind::NotEqual, self.position, self.position + 1);
-                            self.position += 2;
-                        }
-                        _ => {
-                            table.push(TokenKind::Less, self.position, self.position);
-                            self.position += 1;
-                        }
-                    },
-                    b'>' => match self.inner.get(self.position + 1) {
-                        Some(b'=') => {
-                            table.push(TokenKind::GreaterEqual, self.position, self.position + 1);
-                            self.position += 2;
-                        }
-                        _ => {
-                            table.push(TokenKind::Greater, self.position, self.position);
-                            self.position += 1;
-                        }
-                    },
-                    b'=' => {
-                        table.push(TokenKind::Equal, self.position, self.position);
-                        self.position += 1;
-                    }
-                    b',' => {
-                        table.push(TokenKind::Comma, self.position, self.position);
-                        self.position += 1;
-                    }
-                    b'+' => {
-                        table.push(TokenKind::Plus, self.position, self.position);
-                        self.position += 1;
-                    }
-                    b'-' => match self.inner.get(self.position + 1) {
-                        Some(b'0'..=b'9') => {
-                            let start = self.position;
-                            self.position += 1;
-                            let (kind, _, end) = self.scan_number()?;
-                            table.push(kind, start, end);
-                            self.position += 1;
-                        }
-                        _ => {
-                            table.push(TokenKind::Subtract, self.position, self.position);
-                            self.position += 1;
-                        }
-                    },
-                    b'*' => {
-                        table.push(TokenKind::Multiply, self.position, self.position);
-                        self.position += 1;
-                    }
-                    b'/' => {
-                        table.push(TokenKind::Divide, self.position, self.position);
-                        self.position += 1;
-                    }
-                    b'%' => {
-                        table.push(TokenKind::Mod, self.position, self.position);
                         self.position += 1;
                     }
                     _ => {
-                        todo!()
+                        table.push(TokenKind::Subtract, self.position, self.position);
+                        self.position += 1;
                     }
                 },
-                None => {
-                    break;
+                b'*' => {
+                    table.push(TokenKind::Multiply, self.position, self.position);
+                    self.position += 1;
+                }
+                b'/' => {
+                    table.push(TokenKind::Divide, self.position, self.position);
+                    self.position += 1;
+                }
+                b'%' => {
+                    table.push(TokenKind::Mod, self.position, self.position);
+                    self.position += 1;
+                }
+                _ => {
+                    todo!()
                 }
             }
         }

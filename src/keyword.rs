@@ -198,11 +198,47 @@ impl KeywordMap {
         let inner = [
             mini_vec![],
             mini_vec![],
-            mini_vec![Keyword::As, Keyword::By, Keyword::In, Keyword::Is, Keyword::Or, Keyword::On, ],
-            mini_vec![Keyword::Add, Keyword::Not, Keyword::End, Keyword::All, Keyword::Set],
-            mini_vec![Keyword::Join, Keyword::Like,  Keyword::Null, Keyword::Drop, Keyword::From, Keyword::Into,],
-            mini_vec![Keyword::Alter, Keyword::Create, Keyword::Group,  Keyword::Order, Keyword::Table, Keyword::Union, Keyword::Where],
-            mini_vec![Keyword::Select, Keyword::Delete, Keyword::Update, Keyword::Values, Keyword::Exists, Keyword::Having, Keyword::Limit],
+            mini_vec![
+                Keyword::As,
+                Keyword::By,
+                Keyword::In,
+                Keyword::Is,
+                Keyword::Or,
+                Keyword::On,
+            ],
+            mini_vec![
+                Keyword::Add,
+                Keyword::Not,
+                Keyword::End,
+                Keyword::All,
+                Keyword::Set
+            ],
+            mini_vec![
+                Keyword::Join,
+                Keyword::Like,
+                Keyword::Null,
+                Keyword::Drop,
+                Keyword::From,
+                Keyword::Into,
+            ],
+            mini_vec![
+                Keyword::Alter,
+                Keyword::Create,
+                Keyword::Group,
+                Keyword::Order,
+                Keyword::Table,
+                Keyword::Union,
+                Keyword::Where
+            ],
+            mini_vec![
+                Keyword::Select,
+                Keyword::Delete,
+                Keyword::Update,
+                Keyword::Values,
+                Keyword::Exists,
+                Keyword::Having,
+                Keyword::Limit
+            ],
         ];
         Self { inner }
     }

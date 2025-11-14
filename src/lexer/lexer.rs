@@ -80,8 +80,8 @@ impl<'a> Lexer<'a> {
             .get(len)?
             .iter()
             .find(|keyword| {
-                dbg!(&keyword.as_str());
-                dbg!(&tmp.as_str());
+                // dbg!(&keyword.as_str());
+                // dbg!(&tmp.as_str());
                 keyword.as_str() == tmp.as_str()
             })
             .copied()

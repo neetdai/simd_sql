@@ -268,26 +268,22 @@ impl<'a> SimdLexer<'a> {
         let mut pos = self.position + 1;
         let length = self.inner.len();
 
-        unsafe {
             if is_x86_feature_detected!("avx2") {
                 while pos + 32 < length {
-                    let chunk_ptr = self.inner.as_ptr().add(pos).cast::<i8>();
-                    let slice = _mm256_loadu_epi8(chunk_ptr);
+                    let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos+32]);
 
-                    let target = _mm256_set1_epi8(terminator.cast_signed());
-                    let is_target = _mm256_cmpeq_epi8(slice, target);
-                    let mask = _mm256_movemask_epi8(is_target);
+                    let target = Simd::from_array([terminator; 32]);
+                    let mask = slice.simd_eq(target);
 
-                    if mask != -1 {
-                        let trailling_one = mask.trailing_zeros();
-                        let tmp_pos = trailling_one as usize;
-                        let prev_value = self.inner.get_unchecked(pos + tmp_pos - 1);
-
-                        if *prev_value != b'\\' {
-                            pos += tmp_pos;
+                    if mask.any() {
+                        let result = mask.to_bitmask();
+                        let index = result.trailing_zeros() as usize;
+                        let prev_value = self.inner[pos + index - 1];
+                        if prev_value != b'\\' {
+                            pos += index;
                             break;
                         } else {
-                            pos += tmp_pos + 1;
+                            pos += index + 1;
                         }
                     } else {
                         pos += 32;
@@ -297,23 +293,19 @@ impl<'a> SimdLexer<'a> {
 
             if is_x86_feature_detected!("sse4.2") {
                 while pos + 16 < length {
-                    let chunk_ptr = self.inner.as_ptr().add(pos).cast::<__m128i>();
-                    let slice = _mm_loadu_si128(chunk_ptr);
+                    let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
+                    let target = Simd::from_array([terminator; 16]);
+                    let mask = slice.simd_eq(target);
 
-                    let target = _mm_set1_epi8(terminator.cast_signed());
-                    let is_target = _mm_cmpeq_epi8(slice, target);
-                    let mask = _mm_movemask_epi8(is_target);
-
-                    if mask != 0 {
-                        let trailling_one = mask.trailing_zeros();
-                        let tmp_pos = trailling_one as usize;
-                        let prev_value = self.inner.get_unchecked(pos + tmp_pos - 1);
-
-                        if *prev_value != b'\\' {
-                            pos += tmp_pos;
+                    if mask.any() {
+                        let result = mask.to_bitmask();
+                        let index = result.trailing_zeros() as usize;
+                        let prev_value = self.inner[pos + index - 1];
+                        if prev_value != b'\\' {
+                            pos += index;
                             break;
                         } else {
-                            pos += tmp_pos + 1;
+                            pos += index + 1;
                         }
                     } else {
                         pos += 16;
@@ -323,8 +315,8 @@ impl<'a> SimdLexer<'a> {
 
             let tmp_pos = pos;
             for index in tmp_pos..length {
-                let c = self.inner.get_unchecked(index);
-                let prev_c = self.inner.get_unchecked(index - 1);
+                let c = &self.inner[index];
+                let prev_c = &self.inner[index - 1];
                 if *c == terminator && *prev_c != b'\\' {
                     break;
                 }
@@ -334,7 +326,7 @@ impl<'a> SimdLexer<'a> {
             let end = pos;
             self.position = pos;
             Ok((TokenKind::StringLiteral, start, end))
-        }
+        
     }
 
     pub(crate) fn tokenize(&mut self) -> Result<TokenTable, ParserError> {
@@ -441,7 +433,8 @@ impl<'a> SimdLexer<'a> {
                     self.position += 1;
                 }
                 _ => {
-                    todo!()
+                    table.push(TokenKind::Unknown, self.position, self.position);
+                    self.position += 1;
                 }
             }
         }

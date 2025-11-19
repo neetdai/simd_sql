@@ -1,8 +1,9 @@
-use strum::{EnumIter, VariantArray};
+use strum::{EnumIter, VariantArray, AsRefStr};
 
 use minivec::{MiniVec, mini_vec};
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, EnumIter, VariantArray)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, EnumIter, VariantArray, AsRefStr)]
+#[strum(serialize_all = "UPPERCASE")]
 pub enum Keyword {
     Select,
     From,

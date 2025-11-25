@@ -1,3 +1,4 @@
+use bumpalo::Bump;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use simd_sql::Parser;
 use std::hint::black_box;
@@ -5,7 +6,8 @@ use std::hint::black_box;
 fn criterion_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("sql parser 1");
 
-    let parser = Parser::new().unwrap();
+    let bump = Bump::new();
+    let parser = Parser::new(&bump).unwrap();
 
     let sql_1 = "SELECT * FROM table WHERE id = 1";
     let sql_len_1 = sql_1.len();

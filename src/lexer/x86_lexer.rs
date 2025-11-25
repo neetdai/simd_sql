@@ -1,8 +1,5 @@
 use std::{
-    arch::x86_64::*,
-    path::is_separator,
-    simd::{Simd, cmp::{SimdPartialEq, SimdPartialOrd}},
-    str::FromStr,
+    alloc::Allocator, arch::x86_64::*, path::is_separator, simd::{LaneCount, Mask, Simd, SupportedLaneCount, cmp::{SimdPartialEq, SimdPartialOrd}}, str::FromStr
 };
 
 use minivec::MiniVec;
@@ -14,18 +11,20 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub(crate) struct SimdLexer<'a> {
+pub(crate) struct SimdLexer<'a, A: Allocator> {
     inner: &'a [u8],
     position: usize,
     keyword_matcher: &'a KeywordMatcher,
+    allocator: &'a A,
 }
 
-impl<'a> SimdLexer<'a> {
-    pub(crate) fn new(text: &'a str, keyword_matcher: &'a KeywordMatcher) -> Result<Self, ParserError> {
+impl<'a, A: Allocator> SimdLexer<'a, A> {
+    pub(crate) fn new(text: &'a str, keyword_matcher: &'a KeywordMatcher, allocator: &'a A) -> Result<Self, ParserError> {
         Ok(Self {
             inner: text.as_bytes(),
             position: 0,
             keyword_matcher,
+            allocator,
         })
     }
 
@@ -330,115 +329,167 @@ impl<'a> SimdLexer<'a> {
         
     }
 
+    fn perpare_scan_symbol<const N: usize>(bytes: &[u8]) -> Mask<i8, N> where LaneCount<N>: SupportedLaneCount {
+        let source = Simd::<u8, N>::from_slice(bytes);
+        
+        let double_quote = source.simd_eq(Simd::splat(b'"'));
+        let single_quote = source.simd_eq(Simd::splat(b'\''));
+        let left_bracket = source.simd_eq(Simd::splat(b'('));
+        let right_bracket = source.simd_eq(Simd::splat(b')'));
+        let comma = source.simd_eq(Simd::splat(b','));
+        let less = source.simd_eq(Simd::splat(b'<'));
+        let greater = source.simd_eq(Simd::splat(b'>'));
+        let equal = source.simd_eq(Simd::splat(b'='));
+        let plus = source.simd_eq(Simd::splat(b'+'));
+        let sub = source.simd_eq(Simd::splat(b'-'));
+        let mul = source.simd_eq(Simd::splat(b'*'));
+        let div = source.simd_eq(Simd::splat(b'/'));
+        let mod_ = source.simd_eq(Simd::splat(b'%'));
+        let eof = source.simd_eq(Simd::splat(b';'));
+        let backslash = source.simd_eq(Simd::splat(b'\\'));
+
+        double_quote | single_quote | left_bracket | right_bracket
+            | comma | less | greater | equal | plus | sub | mul | div | mod_ | eof | backslash
+    }
+
+    fn perpare_scan_symbol_range(&self) -> Vec<usize, &A> {
+        let len = self.inner.len();
+        let mut position_collect = Vec::<usize, _>::with_capacity_in(len, self.allocator);
+        let mut pos = 0;
+
+        while pos + 32 < len {
+            let mut mask = Self::perpare_scan_symbol::<32>(&self.inner[pos..pos + 32]);
+            let mut mask = mask.to_bitmask() as usize;
+            
+            let mut tmp_pos = pos;
+            while mask != 0 {
+                let p = mask.trailing_zeros() as usize;
+                tmp_pos += p + 1;
+                position_collect.push(tmp_pos - 1);
+                mask >>= p + 1;
+            }
+            pos += 32;
+        }
+
+        while pos + 16 < len {
+            let mut mask = Self::perpare_scan_symbol::<16>(self.inner[pos..pos + 16].try_into().unwrap());
+            let mut mask = mask.to_bitmask() as usize;
+
+            let mut tmp_pos = pos;
+            while mask != 0 {
+                let p = mask.trailing_zeros() as usize;
+                tmp_pos += p + 1;
+                position_collect.push(tmp_pos - 1);
+                mask >>= p + 1;
+            }
+
+            pos += 16;
+        }
+
+        let mut mask = 0u16;
+        let tmp_pos = pos;
+        for (index, c) in self.inner[tmp_pos..len].iter().enumerate() {
+            let t = matches!(c, b'(' | b')' | b'\'' | b'"' | b' ' | b'\t' | b'\n' | b'\r' | b'+' | b'-' | b'*' | b'/' | b'=');
+
+            mask = (t as u16) << index;
+
+        }
+
+        // dbg!(&mask);
+
+        let mut tmp_pos  = pos;
+        while mask != 0 {
+            let index = mask.trailing_zeros() as usize;
+            tmp_pos += index + 1; 
+            position_collect.push(tmp_pos);
+            mask >>= index + 1;
+        }
+
+        position_collect
+    }
+
+    fn perpare_scan_whitespace_mask<const N: usize>(bytes: &[u8]) -> Mask<i8, N> where LaneCount<N>: SupportedLaneCount {
+        let source = Simd::<u8, N>::from_slice(bytes);
+        
+        let space = source.simd_eq(Simd::splat(b' '));
+        let tab = source.simd_eq(Simd::splat(b'\t'));
+        let cr = source.simd_eq(Simd::splat(b'\r'));
+        let newline = source.simd_eq(Simd::splat(b'\n'));
+
+        space | tab | cr | newline
+    }
+
+    fn perpare_scan_no_symbol_and_whitespace(&self) -> Vec<usize, &A> {
+        let len = self.inner.len();
+        let mut position_collect = Vec::with_capacity_in(len, self.allocator);
+        let mut pos = 0;
+
+        while pos + 32 < len {
+            let whitespace_mask = Self::perpare_scan_whitespace_mask::<32>(&self.inner[pos..pos + 32]);
+            let symbol_mask = Self::perpare_scan_symbol::<32>(&self.inner[pos..pos + 32]);
+
+            let mut mask = (!whitespace_mask) & (!symbol_mask);
+            let mut mask = mask.to_bitmask() as usize;
+            
+            let mut tmp_pos = pos;
+            while mask != 0 {
+                let p = mask.trailing_zeros() as usize;
+                tmp_pos += p + 1;
+                position_collect.push(tmp_pos - 1);
+                // mask &= mask - 1;
+                mask >>= p + 1;
+            }
+
+            pos += 32;
+        }
+
+        while pos + 16 < len {
+            let whitespace_mask = Self::perpare_scan_whitespace_mask::<16>(&self.inner[pos..pos + 16]);
+            let symbol_mask = Self::perpare_scan_symbol::<16>(&self.inner[pos..pos + 16]);
+            let mut mask = (!whitespace_mask) & (!symbol_mask);
+            let mut mask = mask.to_bitmask() as usize;
+
+            let mut tmp_pos = pos;
+            while mask != 0 {
+                let p = mask.trailing_zeros() as usize;
+                tmp_pos += p + 1;
+                position_collect.push(tmp_pos - 1);
+                mask >>= p + 1;
+            }
+
+            pos += 16;
+        }
+
+        let mut mask = 0u16;
+        let tmp_pos = pos;
+        for (index, c) in self.inner[tmp_pos..len].iter().enumerate() {
+            let t = matches!(c, b'(' | b')' | b'\'' | b'"' | b' ' | b'\t' | b'\n' | b'\r' | b'+' | b'-' | b'*' | b'/' | b'=');
+            mask |= (!t as u16) << index;
+        }
+        // dbg!(&mask);
+
+        let mut tmp_pos = pos;
+        while mask != 0 {
+            let p = mask.trailing_zeros() as usize;
+            tmp_pos += p + 1;
+            position_collect.push(tmp_pos -1);
+
+            mask >>= p + 1;
+        }
+
+        position_collect
+    }
+
     pub(crate) fn tokenize(&mut self) -> Result<TokenTable, ParserError> {
         let mut table = TokenTable::new();
 
-        loop {
-            self.skip_whitespace();
+        let mut whitespace_position_collect = self.perpare_scan_no_symbol_and_whitespace();
+        let mut position_collect = self.perpare_scan_symbol_range();
 
-            let c = match self.inner.get(self.position) {
-                Some(c) => *c,
-                None => break,
-            };
+        
 
-            match c {
-                b'(' => {
-                    let (kind, start, end) = (TokenKind::LeftParen, self.position, self.position);
-                    table.push(kind, start, end);
-                    self.position += 1;
-                }
-                b')' => {
-                    let (kind, start, end) = (TokenKind::RightParen, self.position, self.position);
-                    table.push(kind, start, end);
-                    self.position += 1;
-                }
-                b'\'' => {
-                    let (kind, start, end) = self.scan_string(b'\'')?;
-                    table.push(kind, start, end);
-                    self.position += 1;
-                }
-                b'"' => {
-                    let (kind, start, end) = self.scan_string(b'"')?;
-                    table.push(kind, start, end);
-                    self.position += 1;
-                }
-                b'a'..=b'z' | b'A'..=b'Z' => {
-                    let (kind, start, end) = self.scan_identify()?;
-                    table.push(kind, start, end);
-                    self.position += 1;
-                }
-                b'0'..=b'9' => {
-                    let (kind, start, end) = self.scan_number()?;
-                    table.push(kind, start, end);
-                    self.position += 1;
-                }
-                b'<' => match self.inner.get(self.position + 1) {
-                    Some(b'=') => {
-                        table.push(TokenKind::LessEqual, self.position, self.position + 1);
-                        self.position += 2;
-                    }
-                    Some(b'>') => {
-                        table.push(TokenKind::NotEqual, self.position, self.position + 1);
-                        self.position += 2;
-                    }
-                    _ => {
-                        table.push(TokenKind::Less, self.position, self.position);
-                        self.position += 1;
-                    }
-                },
-                b'>' => match self.inner.get(self.position + 1) {
-                    Some(b'=') => {
-                        table.push(TokenKind::GreaterEqual, self.position, self.position + 1);
-                        self.position += 2;
-                    }
-                    _ => {
-                        table.push(TokenKind::Greater, self.position, self.position);
-                        self.position += 1;
-                    }
-                },
-                b'=' => {
-                    table.push(TokenKind::Equal, self.position, self.position);
-                    self.position += 1;
-                }
-                b',' => {
-                    table.push(TokenKind::Comma, self.position, self.position);
-                    self.position += 1;
-                }
-                b'+' => {
-                    table.push(TokenKind::Plus, self.position, self.position);
-                    self.position += 1;
-                }
-                b'-' => match self.inner.get(self.position + 1) {
-                    Some(b'0'..=b'9') => {
-                        let start = self.position;
-                        self.position += 1;
-                        let (kind, _, end) = self.scan_number()?;
-                        table.push(kind, start, end);
-                        self.position += 1;
-                    }
-                    _ => {
-                        table.push(TokenKind::Subtract, self.position, self.position);
-                        self.position += 1;
-                    }
-                },
-                b'*' => {
-                    table.push(TokenKind::Multiply, self.position, self.position);
-                    self.position += 1;
-                }
-                b'/' => {
-                    table.push(TokenKind::Divide, self.position, self.position);
-                    self.position += 1;
-                }
-                b'%' => {
-                    table.push(TokenKind::Mod, self.position, self.position);
-                    self.position += 1;
-                }
-                _ => {
-                    table.push(TokenKind::Unknown, self.position, self.position);
-                    self.position += 1;
-                }
-            }
-        }
+        // dbg!(&whitespace_position_collect);
+        // dbg!(&position_collect);
 
         Ok(table)
     }
@@ -448,14 +499,18 @@ impl<'a> SimdLexer<'a> {
 mod tests {
     use super::*;
     use crate::token::{TokenKind, TokenTable};
+    use bumpalo::Bump;
 
     #[test]
     fn test_skip_whitespace() {
+        let alloc = Bump::<64>::with_min_align();
+        let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
         let mut lexer = SimdLexer::new(
             r#"                 
                 "#,
             &keyword_matcher,
+            &binding
         )
         .unwrap();
         let tokens = lexer.tokenize().unwrap();
@@ -470,8 +525,10 @@ mod tests {
 
     #[test]
     fn test_match_number() {
+        let alloc = Bump::<64>::with_min_align();
+        let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = SimdLexer::new("1234567890", &keyword_matcher).unwrap();
+        let mut lexer = SimdLexer::new("1234567890", &keyword_matcher, &binding).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -484,6 +541,7 @@ mod tests {
         let mut lexer = SimdLexer::new(
             "123451111111111111111111111111111111111111 2222222222222222222222222222",
             &keyword_matcher,
+            &binding
         )
         .unwrap();
         let token = lexer.tokenize().unwrap();
@@ -495,7 +553,7 @@ mod tests {
             }
         );
 
-        let mut lexer = SimdLexer::new("-123", &keyword_matcher).unwrap();
+        let mut lexer = SimdLexer::new("-123", &keyword_matcher, &binding).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -508,8 +566,10 @@ mod tests {
 
     #[test]
     fn test_tokenize_cmp() {
+        let alloc = Bump::<64>::with_min_align();
+        let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = SimdLexer::new("a > b >= c < d <= e <> f = g", &keyword_matcher).unwrap();
+        let mut lexer = SimdLexer::new("a > b >= c < d <= e <> f = g", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -550,8 +610,10 @@ mod tests {
 
     #[test]
     fn test_match_string() {
+        let alloc = Bump::<64>::with_min_align();
+        let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = SimdLexer::new("'helloWorld'", &keyword_matcher).unwrap();
+        let mut lexer = SimdLexer::new("'helloWorld'", &keyword_matcher, &binding).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -561,7 +623,7 @@ mod tests {
             }
         );
 
-        let mut lexer = SimdLexer::new(r#"'hello\\'World'"#, &keyword_matcher).unwrap();
+        let mut lexer = SimdLexer::new(r#"'hello\\'World'"#, &keyword_matcher, &binding).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -574,6 +636,7 @@ mod tests {
         let mut lexer = SimdLexer::new(
             "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
             &keyword_matcher,
+            &binding
         )
         .unwrap();
         let token = lexer.tokenize().unwrap();
@@ -588,6 +651,7 @@ mod tests {
         let mut lexer = SimdLexer::new(
             "\'aaaaaaaaaaaaa\\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\'",
             &keyword_matcher,
+            &binding
         )
         .unwrap();
         let token = lexer.tokenize().unwrap();
@@ -602,8 +666,10 @@ mod tests {
 
     #[test]
     fn test_match_indentify() {
+        let alloc = Bump::<64>::with_min_align();
+        let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = SimdLexer::new("asdfghjk", &keyword_matcher).unwrap();
+        let mut lexer = SimdLexer::new("asdfghjk", &keyword_matcher, &binding).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -616,6 +682,7 @@ mod tests {
         let mut lexer = SimdLexer::new(
             "qwertyuiopASDFGHJKL1234567890_zxcvbnm 1234567890",
             &keyword_matcher,
+            &binding
         )
         .unwrap();
         let token = lexer.tokenize().unwrap();
@@ -630,8 +697,10 @@ mod tests {
 
     #[test]
     fn test_keyword() {
+        let alloc = Bump::<64>::with_min_align();
+        let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = SimdLexer::new("select from", &keyword_matcher).unwrap();
+        let mut lexer = SimdLexer::new("select from", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -647,8 +716,10 @@ mod tests {
 
     #[test]
     fn test_sql() {
+        let alloc = Bump::<64>::with_min_align();
+        let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = SimdLexer::new("select * from a", &keyword_matcher).unwrap();
+        let mut lexer = SimdLexer::new("select * from a", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,

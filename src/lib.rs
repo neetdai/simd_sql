@@ -1,4 +1,5 @@
 #![feature(portable_simd)]
+#![feature(allocator_api)]
 
 mod error;
 mod keyword;

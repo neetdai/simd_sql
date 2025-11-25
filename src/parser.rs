@@ -1,3 +1,5 @@
+use std::alloc::{Allocator, Global};
+
 use crate::{
     error::ParserError,
     keyword::KeywordMatcher,
@@ -7,15 +9,15 @@ use bumpalo::Bump;
 use simdutf8::basic::from_utf8;
 
 #[derive(Debug)]
-pub struct Parser {
-    arena: Bump,
+pub struct Parser<A: Allocator> {
+    allocator: A,
     keyword_matcher: KeywordMatcher,
 }
 
-impl Parser {
-    pub fn new() -> Result<Self, ParserError> {
+impl<A: Allocator> Parser<A> {
+    pub fn new(allocator: A) -> Result<Self, ParserError> {
         Ok(Self {
-            arena: Bump::new(),
+            allocator,
             keyword_matcher: KeywordMatcher::new(),
         })
     }
@@ -24,7 +26,7 @@ impl Parser {
         let text = from_utf8(text.as_bytes())?;
         let tokentable = {
             if is_x86_feature_detected!("avx2") {
-                let mut lexer = SimdLexer::new(&text, &self.keyword_matcher)?;
+                let mut lexer = SimdLexer::new(&text, &self.keyword_matcher, &self.allocator)?;
                 lexer.tokenize()?
             } else {
                 let mut lexer = Lexer::new(&text, &self.keyword_matcher)?;

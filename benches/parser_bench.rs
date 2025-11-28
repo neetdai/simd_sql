@@ -14,7 +14,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     group.throughput(Throughput::Elements(sql_1.len() as u64));
     group.bench_with_input(BenchmarkId::new("sql parser 1", sql_len_1), sql_1, |b, i| {
         b.iter(|| {
-            parser.parse(&i).unwrap();
+            parser.parse(black_box(&i)).unwrap();
         });
     });
 }

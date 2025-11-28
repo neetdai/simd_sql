@@ -1,8 +1,9 @@
 use std::{
-    alloc::Allocator, arch::x86_64::*, path::is_separator, simd::{LaneCount, Mask, Simd, SupportedLaneCount, cmp::{SimdPartialEq, SimdPartialOrd}}, str::FromStr
+    alloc::Allocator, arch::x86_64::*, ops::Add, path::is_separator, simd::{LaneCount, Mask, Simd, SupportedLaneCount, cmp::{SimdPartialEq, SimdPartialOrd}}, str::FromStr
 };
 
 use minivec::MiniVec;
+use phf::phf_map;
 
 use crate::{
     error::ParserError,
@@ -329,7 +330,46 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         
     }
 
-    fn perpare_scan_symbol<const N: usize>(bytes: &[u8]) -> Mask<i8, N> where LaneCount<N>: SupportedLaneCount {
+    // 匹配符号
+    fn match_symbol(&self, arr: &[(usize, usize)]) -> Vec<((usize, usize), TokenKind), &A> {
+        let symbol_map: phf::Map<&'static [u8], TokenKind> = phf_map! {
+            b"+" => TokenKind::Plus,
+            b"-" => TokenKind::Subtract,
+            b"*" => TokenKind::Multiply,
+            b"/" => TokenKind::Divide,
+            b"%" => TokenKind::Mod,
+            b"(" => TokenKind::LeftParen,
+            b")" => TokenKind::RightParen,
+            b"<" => TokenKind::Less,
+            b"<>" => TokenKind::NotEqual,
+            b"<=" => TokenKind::LessEqual,
+            b">" => TokenKind::Greater,
+            b">=" => TokenKind::GreaterEqual,
+            b"=" => TokenKind::Equal,
+            b"," => TokenKind::Comma,
+        };
+        let len = arr.len();
+        let mut list = Vec::with_capacity_in(len, self.allocator);
+
+        for (start, end) in arr {
+            let bytes = &self.inner[*start..=*end];
+            if let Some(kind) = symbol_map.get(bytes) {
+                list.push(((*start, *end), kind.clone()));
+            }
+        }
+
+        list
+    }
+
+    fn prepare_scan_backslash<const N: usize>(bytes: &[u8], odd_digit: u64, even_digit: u64) -> u64 where LaneCount<N>: SupportedLaneCount {
+        let source = Simd::<u8, N>::from_slice(bytes);
+        let backslash = source.simd_eq(Simd::splat(b'\\'));
+        let backslash = backslash.to_bitmask();
+
+        (((backslash + (backslash & !(backslash << 1) & even_digit)) & !backslash) & !even_digit) | (((backslash + ((backslash & !(backslash << 1)) & odd_digit)) & !backslash) & even_digit)
+    }
+
+    fn prepare_scan_symbol<const N: usize>(bytes: &[u8]) -> Mask<i8, N> where LaneCount<N>: SupportedLaneCount {
         let source = Simd::<u8, N>::from_slice(bytes);
         
         let double_quote = source.simd_eq(Simd::splat(b'"'));
@@ -352,13 +392,13 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
             | comma | less | greater | equal | plus | sub | mul | div | mod_ | eof | backslash
     }
 
-    fn perpare_scan_symbol_range(&self) -> Vec<usize, &A> {
+    fn prepare_scan_symbol_range(&self) -> Vec<usize, &A> {
         let len = self.inner.len();
         let mut position_collect = Vec::<usize, _>::with_capacity_in(len, self.allocator);
         let mut pos = 0;
 
         while pos + 32 < len {
-            let mut mask = Self::perpare_scan_symbol::<32>(&self.inner[pos..pos + 32]);
+            let mut mask = Self::prepare_scan_symbol::<32>(&self.inner[pos..pos + 32]);
             let mut mask = mask.to_bitmask() as usize;
             
             let mut tmp_pos = pos;
@@ -372,7 +412,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         }
 
         while pos + 16 < len {
-            let mut mask = Self::perpare_scan_symbol::<16>(self.inner[pos..pos + 16].try_into().unwrap());
+            let mut mask = Self::prepare_scan_symbol::<16>(self.inner[pos..pos + 16].try_into().unwrap());
             let mut mask = mask.to_bitmask() as usize;
 
             let mut tmp_pos = pos;
@@ -426,7 +466,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
 
         while pos + 32 < len {
             let whitespace_mask = Self::perpare_scan_whitespace_mask::<32>(&self.inner[pos..pos + 32]);
-            let symbol_mask = Self::perpare_scan_symbol::<32>(&self.inner[pos..pos + 32]);
+            let symbol_mask = Self::prepare_scan_symbol::<32>(&self.inner[pos..pos + 32]);
 
             let mut mask = (!whitespace_mask) & (!symbol_mask);
             let mut mask = mask.to_bitmask() as usize;
@@ -445,7 +485,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
 
         while pos + 16 < len {
             let whitespace_mask = Self::perpare_scan_whitespace_mask::<16>(&self.inner[pos..pos + 16]);
-            let symbol_mask = Self::perpare_scan_symbol::<16>(&self.inner[pos..pos + 16]);
+            let symbol_mask = Self::prepare_scan_symbol::<16>(&self.inner[pos..pos + 16]);
             let mut mask = (!whitespace_mask) & (!symbol_mask);
             let mut mask = mask.to_bitmask() as usize;
 
@@ -480,14 +520,38 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         position_collect
     }
 
+    fn find_continuous_ranges(&self, arr: &[usize]) -> Vec<(usize, usize), &A> {
+        let len = arr.len();
+        let mut ranges = Vec::with_capacity_in(len, self.allocator);
+
+        if len > 0 {
+            let mut start = arr[0];
+        let mut prev = arr[0];
+            for current in &arr[1..] {
+                if *current != prev + 1 {
+                    ranges.push((start, prev));
+                    start = *current;
+                }
+                prev = *current;
+            }
+
+            ranges.push((start, prev));
+        }
+
+        ranges
+    }
+
     pub(crate) fn tokenize(&mut self) -> Result<TokenTable, ParserError> {
         let mut table = TokenTable::new();
 
-        let mut whitespace_position_collect = self.perpare_scan_no_symbol_and_whitespace();
-        let mut position_collect = self.perpare_scan_symbol_range();
+        let mut no_whitespace_and_symbol_position_collect = self.perpare_scan_no_symbol_and_whitespace();
+        let mut position_collect = self.prepare_scan_symbol_range();
+        let no_whitespace_and_symbol_ranges = self.find_continuous_ranges(&no_whitespace_and_symbol_position_collect);
+
+        let symbol_ranges = self.find_continuous_ranges(&position_collect);
+        let symbol_token = self.match_symbol(&symbol_ranges);
 
         
-
         // dbg!(&whitespace_position_collect);
         // dbg!(&position_collect);
 

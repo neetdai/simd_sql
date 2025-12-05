@@ -11,6 +11,9 @@ use crate::{
     token::{TokenKind, TokenTable},
 };
 
+const EVEN_BITS: u64 = 0x5555_5555_5555_5555;
+const ODD_BITS: u64 = 0xaaaa_aaaa_aaaa_aaaa;
+
 #[derive(Debug)]
 pub(crate) struct SimdLexer<'a, A: Allocator> {
     inner: &'a [u8],
@@ -361,12 +364,47 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         list
     }
 
-    fn prepare_scan_backslash<const N: usize>(bytes: &[u8], odd_digit: u64, even_digit: u64) -> u64 where LaneCount<N>: SupportedLaneCount {
+    fn find_escape_branchless(backslash: u64, quote: u64) -> u64 {
+        let escape_prefix = (((backslash + (backslash & !(backslash << 1) & EVEN_BITS)) & !backslash) & !EVEN_BITS) | (((backslash + ((backslash & !(backslash << 1)) & ODD_BITS)) & !backslash) & EVEN_BITS);
+        escape_prefix | (escape_prefix & (quote << 1))
+    }
+
+    fn prepare_scan_backslash<const N: usize>(bytes: &[u8]) -> u64 where LaneCount<N>: SupportedLaneCount {
         let source = Simd::<u8, N>::from_slice(bytes);
         let backslash = source.simd_eq(Simd::splat(b'\\'));
         let backslash = backslash.to_bitmask();
 
-        (((backslash + (backslash & !(backslash << 1) & even_digit)) & !backslash) & !even_digit) | (((backslash + ((backslash & !(backslash << 1)) & odd_digit)) & !backslash) & even_digit)
+        backslash
+    }
+
+    fn prepare_scan_quote<const N: usize>(bytes: &[u8], quote: u8) -> u64 where LaneCount<N>: SupportedLaneCount {
+        let source = Simd::<u8, N>::from_slice(bytes);
+        let quote = source.simd_eq(Simd::splat(quote));
+        let quote = quote.to_bitmask();
+
+        quote
+    }
+
+    fn prepare_scan_quote_range(&self) -> Vec<usize, &A> {
+        let len = self.inner.len();
+        let mut position_collect = Vec::<usize, _>::with_capacity_in(len, self.allocator);
+        let mut pos = 0;
+
+        while pos + 32 < len {
+            let backslash = Self::prepare_scan_backslash::<32>(&self.inner[pos..pos + 32]);
+            let quote = Self::prepare_scan_quote::<32>(&self.inner[pos..pos + 32], b'"');
+            let result = Self::find_escape_branchless(backslash, quote);
+            dbg!(&result);
+            pos += 32;
+        }
+
+        while pos + 16 < len {
+            let backslash = Self::prepare_scan_backslash::<16>(&self.inner[pos..pos + 16]);
+            dbg!(&backslash);
+            pos += 16;
+        }
+
+        position_collect
     }
 
     fn prepare_scan_symbol<const N: usize>(bytes: &[u8]) -> Mask<i8, N> where LaneCount<N>: SupportedLaneCount {
@@ -544,6 +582,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
     pub(crate) fn tokenize(&mut self) -> Result<TokenTable, ParserError> {
         let mut table = TokenTable::new();
 
+        let mut quote = self.prepare_scan_quote_range();
         let mut no_whitespace_and_symbol_position_collect = self.perpare_scan_no_symbol_and_whitespace();
         let mut position_collect = self.prepare_scan_symbol_range();
         let no_whitespace_and_symbol_ranges = self.find_continuous_ranges(&no_whitespace_and_symbol_position_collect);

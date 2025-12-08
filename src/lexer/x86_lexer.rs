@@ -366,7 +366,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
 
     fn find_escape_branchless(backslash: u64, quote: u64) -> u64 {
         let escape_prefix = (((backslash + (backslash & !(backslash << 1) & EVEN_BITS)) & !backslash) & !EVEN_BITS) | (((backslash + ((backslash & !(backslash << 1)) & ODD_BITS)) & !backslash) & EVEN_BITS);
-        escape_prefix | (escape_prefix & (quote << 1))
+        escape_prefix & quote
     }
 
     fn prepare_scan_backslash<const N: usize>(bytes: &[u8]) -> u64 where LaneCount<N>: SupportedLaneCount {
@@ -392,16 +392,62 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
 
         while pos + 32 < len {
             let backslash = Self::prepare_scan_backslash::<32>(&self.inner[pos..pos + 32]);
-            let quote = Self::prepare_scan_quote::<32>(&self.inner[pos..pos + 32], b'"');
-            let result = Self::find_escape_branchless(backslash, quote);
-            dbg!(&result);
+            let single_quote = Self::prepare_scan_quote::<32>(&self.inner[pos..pos + 32], b'\'');
+            let double_quote = Self::prepare_scan_quote::<32>(&self.inner[pos..pos + 32], b'"');
+            let single_result = Self::find_escape_branchless(backslash, single_quote);
+            let double_result = Self::find_escape_branchless(backslash, double_quote);
+            
+            let mut mask = (single_quote ^ single_result) | (double_quote ^ double_result);
+
+            let mut tmp_pos = pos;
+            while mask != 0 {
+                let p = mask.trailing_zeros() as usize;
+                tmp_pos += p + 1;
+                position_collect.push(tmp_pos - 1);
+                // mask &= mask - 1;
+                mask >>= p + 1;
+            }
+            
             pos += 32;
         }
 
         while pos + 16 < len {
             let backslash = Self::prepare_scan_backslash::<16>(&self.inner[pos..pos + 16]);
-            dbg!(&backslash);
+            let single_quote = Self::prepare_scan_quote::<16>(&self.inner[pos..pos + 16], b'\'');
+            let double_quote = Self::prepare_scan_quote::<16>(&self.inner[pos..pos + 16], b'"');
+            let single_result = Self::find_escape_branchless(backslash, single_quote);
+            let double_result = Self::find_escape_branchless(backslash, double_quote);
+            let mut mask = (single_quote ^ single_result) | (double_quote ^ double_result);
+
+            let mut tmp_pos = pos;
+            while mask != 0 {
+                let p = mask.trailing_zeros() as usize;
+                tmp_pos += p + 1;
+                position_collect.push(tmp_pos - 1);
+                mask >>= p + 1;
+            }
             pos += 16;
+        }
+
+        let mut single_mask = 0u64;
+        let mut double_mask = 0u64;
+        let mut backblash_mask = 0u64;
+        let mut tmp_pos = pos;
+        for (index, c) in self.inner[pos..].iter().enumerate() {
+            single_mask |= ((*c == b'\'') as u64) << index;
+            double_mask |= ((*c == b'"') as u64) << index;
+            backblash_mask |= ((*c == b'\\') as u64) << index;
+        }
+
+        let single_result = Self::find_escape_branchless(backblash_mask, single_mask);
+        let double_result = Self::find_escape_branchless(backblash_mask, double_mask);
+        let mut result = (single_mask ^ single_result) | (double_mask ^ double_result);
+
+        while result != 0 {
+            let p = result.trailing_zeros() as usize;
+            tmp_pos += p + 1;
+            position_collect.push(tmp_pos - 1);
+            result >>= p + 1;
         }
 
         position_collect
@@ -590,7 +636,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         let symbol_ranges = self.find_continuous_ranges(&position_collect);
         let symbol_token = self.match_symbol(&symbol_ranges);
 
-        
+        // dbg!(&quote);
         // dbg!(&whitespace_position_collect);
         // dbg!(&position_collect);
 

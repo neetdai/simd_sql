@@ -456,8 +456,6 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
     fn prepare_scan_symbol<const N: usize>(bytes: &[u8]) -> Mask<i8, N> where LaneCount<N>: SupportedLaneCount {
         let source = Simd::<u8, N>::from_slice(bytes);
         
-        let double_quote = source.simd_eq(Simd::splat(b'"'));
-        let single_quote = source.simd_eq(Simd::splat(b'\''));
         let left_bracket = source.simd_eq(Simd::splat(b'('));
         let right_bracket = source.simd_eq(Simd::splat(b')'));
         let comma = source.simd_eq(Simd::splat(b','));
@@ -470,10 +468,10 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         let div = source.simd_eq(Simd::splat(b'/'));
         let mod_ = source.simd_eq(Simd::splat(b'%'));
         let eof = source.simd_eq(Simd::splat(b';'));
-        let backslash = source.simd_eq(Simd::splat(b'\\'));
+        // let backslash = source.simd_eq(Simd::splat(b'\\'));
 
-        double_quote | single_quote | left_bracket | right_bracket
-            | comma | less | greater | equal | plus | sub | mul | div | mod_ | eof | backslash
+        left_bracket | right_bracket
+            | comma | less | greater | equal | plus | sub | mul | div | mod_ | eof
     }
 
     fn prepare_scan_symbol_range(&self) -> Vec<usize, &A> {
@@ -483,7 +481,10 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
 
         while pos + 32 < len {
             let mut mask = Self::prepare_scan_symbol::<32>(&self.inner[pos..pos + 32]);
-            let mut mask = mask.to_bitmask() as usize;
+            let backslash = Self::prepare_scan_backslash::<32>(&self.inner[pos..pos + 32]);
+            let symbol_mask = mask.to_bitmask();
+            let result = Self::find_escape_branchless(backslash, symbol_mask);
+            let mut mask = symbol_mask ^ result;
             
             let mut tmp_pos = pos;
             while mask != 0 {
@@ -497,7 +498,10 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
 
         while pos + 16 < len {
             let mut mask = Self::prepare_scan_symbol::<16>(self.inner[pos..pos + 16].try_into().unwrap());
-            let mut mask = mask.to_bitmask() as usize;
+            let backslash = Self::prepare_scan_backslash::<16>(&self.inner[pos..pos + 16]);
+            let symbol_mask = mask.to_bitmask();
+            let result = Self::find_escape_branchless(backslash, symbol_mask);
+            let mut mask = symbol_mask ^ result;
 
             let mut tmp_pos = pos;
             while mask != 0 {
@@ -510,14 +514,19 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
             pos += 16;
         }
 
-        let mut mask = 0u16;
+        let mut mask = 0;
+        let mut backslash_mask = 0;
         let tmp_pos = pos;
         for (index, c) in self.inner[tmp_pos..len].iter().enumerate() {
             let t = matches!(c, b'(' | b')' | b'\'' | b'"' | b' ' | b'\t' | b'\n' | b'\r' | b'+' | b'-' | b'*' | b'/' | b'=');
+            let backslash = matches!(c, b'\\');
 
-            mask = (t as u16) << index;
-
+            mask = (t as u64) << index;
+            backslash_mask = (backslash as u64) << index;
         }
+
+        let result = Self::find_escape_branchless(backslash_mask, mask);
+        let mut mask = mask ^ result;
 
         // dbg!(&mask);
 

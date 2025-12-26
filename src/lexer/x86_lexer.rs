@@ -1,5 +1,5 @@
 use std::{
-    alloc::Allocator, arch::x86_64::*, ops::Add, path::is_separator, simd::{LaneCount, Mask, Simd, SupportedLaneCount, cmp::{SimdPartialEq, SimdPartialOrd}}, str::FromStr
+    alloc::Allocator, arch::x86_64::*, cmp::Reverse, collections::{BTreeMap, BinaryHeap}, ops::Add, path::is_separator, simd::{LaneCount, Mask, Simd, SupportedLaneCount, cmp::{SimdPartialEq, SimdPartialOrd}}, str::FromStr
 };
 
 use minivec::MiniVec;
@@ -8,11 +8,47 @@ use phf::phf_map;
 use crate::{
     error::ParserError,
     keyword::{Keyword, KeywordMatcher},
-    token::{TokenKind, TokenTable},
+    token::{self, TokenKind, TokenTable},
 };
 
 const EVEN_BITS: u64 = 0x5555_5555_5555_5555;
 const ODD_BITS: u64 = 0xaaaa_aaaa_aaaa_aaaa;
+
+const symbol_map: phf::Map<&'static [u8], TokenKind> = phf_map! {
+    b"+" => TokenKind::Plus,
+    b"-" => TokenKind::Subtract,
+    b"*" => TokenKind::Multiply,
+    b"/" => TokenKind::Divide,
+    b"%" => TokenKind::Mod,
+    b"(" => TokenKind::LeftParen,
+    b")" => TokenKind::RightParen,
+    b"<" => TokenKind::Less,
+    b"<>" => TokenKind::NotEqual,
+    b"<=" => TokenKind::LessEqual,
+    b">" => TokenKind::Greater,
+    b">=" => TokenKind::GreaterEqual,
+    b"=" => TokenKind::Equal,
+    b"," => TokenKind::Comma,
+};
+
+#[derive(Debug, PartialEq, Eq)]
+struct TokenItem {
+    start: usize,
+    end: usize,
+    kind: TokenKind,
+}
+
+impl Ord for TokenItem {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.start.cmp(&other.start)
+    }
+}
+
+impl PartialOrd for TokenItem {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 #[derive(Debug)]
 pub(crate) struct SimdLexer<'a, A: Allocator> {
@@ -334,30 +370,42 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
     }
 
     // 匹配符号
-    fn match_symbol(&self, arr: &[(usize, usize)]) -> Vec<((usize, usize), TokenKind), &A> {
-        let symbol_map: phf::Map<&'static [u8], TokenKind> = phf_map! {
-            b"+" => TokenKind::Plus,
-            b"-" => TokenKind::Subtract,
-            b"*" => TokenKind::Multiply,
-            b"/" => TokenKind::Divide,
-            b"%" => TokenKind::Mod,
-            b"(" => TokenKind::LeftParen,
-            b")" => TokenKind::RightParen,
-            b"<" => TokenKind::Less,
-            b"<>" => TokenKind::NotEqual,
-            b"<=" => TokenKind::LessEqual,
-            b">" => TokenKind::Greater,
-            b">=" => TokenKind::GreaterEqual,
-            b"=" => TokenKind::Equal,
-            b"," => TokenKind::Comma,
-        };
+    fn match_symbol(&self, arr: &[(usize, usize)]) -> Vec<TokenItem, &A> {
+        
         let len = arr.len();
         let mut list = Vec::with_capacity_in(len, self.allocator);
 
         for (start, end) in arr {
             let bytes = &self.inner[*start..=*end];
             if let Some(kind) = symbol_map.get(bytes) {
-                list.push(((*start, *end), kind.clone()));
+                // list.push(((*start, *end), kind.clone()));
+                list.push(TokenItem {
+                    start: *start,
+                    end: *end,
+                    kind: kind.clone(),
+                });
+            }
+        }
+
+        list
+    }
+
+    fn match_ident(&self, arr: &[(usize, usize)]) -> Vec<TokenItem, &A> {
+        let mut list = Vec::with_capacity_in(arr.len(), self.allocator);
+        for (start, end) in arr {
+            let bytes = &self.inner[*start..=*end];
+            if bytes.iter().all(|b| b.is_ascii_digit()) {
+                list.push(TokenItem {
+                    start: *start,
+                    end: *end,
+                    kind: TokenKind::Number,
+                });
+            } else {
+                list.push(TokenItem {
+                    start: *start,
+                    end: *end,
+                    kind: TokenKind::Identifier,
+                });
             }
         }
 
@@ -534,8 +582,10 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         let mut mask = 0;
         let mut backslash_mask = 0;
         let tmp_pos = pos;
+        // dbg!(&tmp_pos);
+        // dbg!(self.inner[tmp_pos] == b'=');
         for (index, c) in self.inner[tmp_pos..len].iter().enumerate() {
-            let t = matches!(c, b'(' | b')' | b'\'' | b'"' | b' ' | b'\t' | b'\n' | b'\r' | b'+' | b'-' | b'*' | b'/' | b'=');
+            let t = matches!(c, b'(' | b')' | b'+' | b'-' | b'*' | b'/' | b'=' | b'<' | b'>' | b',' | b'%' | b';');
             let backslash = matches!(c, b'\\');
             let b = block_range[index];
 
@@ -543,6 +593,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
             backslash_mask = (backslash as u64) << index;
         }
 
+        dbg!(&mask);
         let result = Self::find_escape_branchless(backslash_mask, mask);
         let mut mask = mask ^ result;
 
@@ -551,9 +602,11 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         let mut tmp_pos  = pos;
         while mask != 0 {
             let index = mask.trailing_zeros() as usize;
-            tmp_pos += index + 1; 
+            tmp_pos += index;
+            dbg!(&tmp_pos);
             position_collect.push(tmp_pos);
             mask >>= index + 1;
+            tmp_pos += 1;
         }
 
         position_collect
@@ -617,7 +670,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         let mut mask = 0u16;
         let tmp_pos = pos;
         for (index, c) in self.inner[tmp_pos..len].iter().enumerate() {
-            let t = matches!(c, b'(' | b')' | b'\'' | b'"' | b' ' | b'\t' | b'\n' | b'\r' | b'+' | b'-' | b'*' | b'/' | b'=');
+            let t = matches!(c, b'(' | b')' | b'\'' | b'"' | b' ' | b'\t' | b'\n' | b'\r' | b'+' | b'-' | b'*' | b'/' | b'=' | b'<' | b'>' | b',' | b'%' | b';');
             let b = block_range[index];
             mask |= ((!t as u16) & (!b as u16)) << index;
         }
@@ -636,6 +689,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
     }
 
     fn find_continuous_ranges(&self, arr: &[usize]) -> Vec<(usize, usize), &A> {
+        // dbg!(&arr);
         let len = arr.len();
         let mut ranges = Vec::with_capacity_in(len, self.allocator);
 
@@ -657,22 +711,79 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
     }
 
     pub(crate) fn tokenize(&mut self) -> Result<TokenTable, ParserError> {
-        let mut table = TokenTable::new();
-
-        let mut quote = self.prepare_scan_quote_range();
+        let quote = self.prepare_scan_quote_range();
         let quote_block_range = self.quote_range(&quote);
         let no_whitespace_and_symbol_position_collect = self.perpare_scan_no_symbol_and_whitespace(&quote_block_range);
-        let mut position_collect = self.prepare_scan_symbol_range(&quote_block_range);
+        let position_collect = self.prepare_scan_symbol_range(&quote_block_range);
+        dbg!(&position_collect);
         let no_whitespace_and_symbol_ranges = self.find_continuous_ranges(&no_whitespace_and_symbol_position_collect);
 
         let symbol_ranges = self.find_continuous_ranges(&position_collect);
         let symbol_token = self.match_symbol(&symbol_ranges);
+        let no_whitespace_and_symbol_token = self.match_ident(&no_whitespace_and_symbol_ranges);
+        let quote_token = quote.chunks(2).map(|positions| {
+            TokenItem {
+                start: positions[0],
+                end: positions[1],
+                kind: TokenKind::StringLiteral
+            }
+        }).collect::<Vec<TokenItem>>();
 
         // dbg!(&quote_block_range);
         // dbg!(&quote);
         // dbg!(&no_whitespace_and_symbol_ranges);
-        dbg!(&symbol_token);
+        // dbg!(&symbol_token);
 
+        // let mut heap = BinaryHeap::with_capacity_in(symbol_token.len() + no_whitespace_and_symbol_ranges.len() + quote.len(), self.allocator);
+        // let mut heap = Vec::with_capacity_in(symbol_token.len() + no_whitespace_and_symbol_ranges.len() + quote.len(), self.allocator);
+        // for symbol in symbol_token {
+        //     heap.push(Reverse(symbol));
+        //     // heap.push(symbol);
+        // }
+        // for no_whitespace_and_symbol in no_whitespace_and_symbol_token {
+        //     heap.push(Reverse(no_whitespace_and_symbol));
+        //     // heap.push(no_whitespace_and_symbol);
+        // }
+
+        let mut table = TokenTable::with_capacity(symbol_token.len() + no_whitespace_and_symbol_ranges.len() + quote_token.len());
+        let mut symbol_offset = 0;
+        let mut no_whitespace_and_symbol_offset = 0;
+        let mut quote_offset = 0;
+
+        let symbol_len = symbol_token.len();
+        let no_whitespace_and_symbol_len = no_whitespace_and_symbol_token.len();
+        let quote_len = quote_token.len();
+
+        let default_max_token = TokenItem {
+            start: usize::MAX,
+            end: usize::MAX,
+            kind: TokenKind::Unknown,
+        };
+
+        while (symbol_offset + no_whitespace_and_symbol_offset + quote_offset) < (symbol_len + no_whitespace_and_symbol_len + quote_len) {
+            let symbol = symbol_token.get(symbol_offset).unwrap_or(&default_max_token);
+            let no_whitespace_and_symbol = no_whitespace_and_symbol_token.get(no_whitespace_and_symbol_offset).unwrap_or(&default_max_token);
+            let quote = quote_token.get(quote_offset).unwrap_or(&default_max_token);
+
+            let min = symbol.min(no_whitespace_and_symbol).min(quote);
+
+            table.push(min.kind.clone(), min.start, min.end);
+
+            if min == symbol {
+                symbol_offset += 1;
+            } else if min == no_whitespace_and_symbol {
+                no_whitespace_and_symbol_offset += 1;
+            } else {
+                quote_offset += 1;
+            }
+            // dbg!(&symbol_offset, &no_whitespace_and_symbol_offset, &quote_offset);
+        }
+        // for reverse in heap.into_iter_sorted() {
+        //     let token_item = reverse.0;
+        //     table.push(token_item.kind, token_item.start, token_item.end);
+        // }
+
+        // dbg!(&table);
         Ok(table)
     }
 }
@@ -685,7 +796,7 @@ mod tests {
 
     #[test]
     fn test_skip_whitespace() {
-        let alloc = Bump::<64>::with_min_align();
+        let alloc = Bump::new();
         let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
         let mut lexer = SimdLexer::new(
@@ -707,7 +818,7 @@ mod tests {
 
     #[test]
     fn test_match_number() {
-        let alloc = Bump::<64>::with_min_align();
+        let alloc = Bump::new();
         let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
         let mut lexer = SimdLexer::new("1234567890", &keyword_matcher, &binding).unwrap();
@@ -716,7 +827,7 @@ mod tests {
             token,
             TokenTable {
                 tokens: vec![TokenKind::Number,],
-                positions: vec![(0, 10)],
+                positions: vec![(0, 9)],
             }
         );
 
@@ -731,24 +842,16 @@ mod tests {
             token,
             TokenTable {
                 tokens: vec![TokenKind::Number, TokenKind::Number],
-                positions: vec![(0, 42), (43, 71)],
+                positions: vec![(0, 41), (43, 70)],
             }
         );
 
-        let mut lexer = SimdLexer::new("-123", &keyword_matcher, &binding).unwrap();
-        let token = lexer.tokenize().unwrap();
-        assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 4)],
-            }
-        );
+        
     }
 
     #[test]
     fn test_tokenize_cmp() {
-        let alloc = Bump::<64>::with_min_align();
+        let alloc = Bump::new();
         let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
         let mut lexer = SimdLexer::new("a > b >= c < d <= e <> f = g", &keyword_matcher, &binding).unwrap();

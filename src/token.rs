@@ -39,6 +39,13 @@ impl TokenTable {
         }
     }
 
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
+        Self {
+            tokens: Vec::with_capacity(capacity),
+            positions: Vec::with_capacity(capacity),
+        }
+    }
+
     pub(crate) fn push(&mut self, kind: TokenKind, start: usize, end: usize) {
         self.tokens.push(kind);
         self.positions.push((start, end));

@@ -506,6 +506,8 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         let mut block_range = Vec::with_capacity_in(self.inner.len(), self.allocator);
         block_range.resize(self.inner.len(), 0);
 
+        // dbg!(&quote);
+
         for chunk in quote.chunks(2) {
             let [start_position, end_position] = chunk.try_into().unwrap();
             for c in &mut block_range[start_position..=end_position] {
@@ -553,9 +555,10 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
             let mut tmp_pos = pos;
             while mask != 0 {
                 let p = mask.trailing_zeros() as usize;
-                tmp_pos += p + 1;
-                position_collect.push(tmp_pos - 1);
+                tmp_pos += p;
+                position_collect.push(tmp_pos);
                 mask >>= p + 1;
+                tmp_pos += 1;
             }
             pos += 32;
         }
@@ -571,9 +574,10 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
             let mut tmp_pos = pos;
             while mask != 0 {
                 let p = mask.trailing_zeros() as usize;
-                tmp_pos += p + 1;
-                position_collect.push(tmp_pos - 1);
+                tmp_pos += p;
+                position_collect.push(tmp_pos);
                 mask >>= p + 1;
+                tmp_pos += 1;
             }
 
             pos += 16;
@@ -593,7 +597,6 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
             backslash_mask = (backslash as u64) << index;
         }
 
-        dbg!(&mask);
         let result = Self::find_escape_branchless(backslash_mask, mask);
         let mut mask = mask ^ result;
 
@@ -603,7 +606,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         while mask != 0 {
             let index = mask.trailing_zeros() as usize;
             tmp_pos += index;
-            dbg!(&tmp_pos);
+            // dbg!(&tmp_pos);
             position_collect.push(tmp_pos);
             mask >>= index + 1;
             tmp_pos += 1;
@@ -679,9 +682,9 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         let mut tmp_pos = pos;
         while mask != 0 {
             let p = mask.trailing_zeros() as usize;
-            tmp_pos += p + 1;
-            position_collect.push(tmp_pos -1);
-
+            tmp_pos += p;
+            position_collect.push(tmp_pos);
+            tmp_pos += 1;
             mask >>= p + 1;
         }
 
@@ -715,12 +718,13 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
         let quote_block_range = self.quote_range(&quote);
         let no_whitespace_and_symbol_position_collect = self.perpare_scan_no_symbol_and_whitespace(&quote_block_range);
         let position_collect = self.prepare_scan_symbol_range(&quote_block_range);
-        dbg!(&position_collect);
+        // dbg!(&position_collect);
         let no_whitespace_and_symbol_ranges = self.find_continuous_ranges(&no_whitespace_and_symbol_position_collect);
 
         let symbol_ranges = self.find_continuous_ranges(&position_collect);
         let symbol_token = self.match_symbol(&symbol_ranges);
         let no_whitespace_and_symbol_token = self.match_ident(&no_whitespace_and_symbol_ranges);
+        // dbg!(&no_whitespace_and_symbol_token);
         let quote_token = quote.chunks(2).map(|positions| {
             TokenItem {
                 start: positions[0],
@@ -728,22 +732,6 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
                 kind: TokenKind::StringLiteral
             }
         }).collect::<Vec<TokenItem>>();
-
-        // dbg!(&quote_block_range);
-        // dbg!(&quote);
-        // dbg!(&no_whitespace_and_symbol_ranges);
-        // dbg!(&symbol_token);
-
-        // let mut heap = BinaryHeap::with_capacity_in(symbol_token.len() + no_whitespace_and_symbol_ranges.len() + quote.len(), self.allocator);
-        // let mut heap = Vec::with_capacity_in(symbol_token.len() + no_whitespace_and_symbol_ranges.len() + quote.len(), self.allocator);
-        // for symbol in symbol_token {
-        //     heap.push(Reverse(symbol));
-        //     // heap.push(symbol);
-        // }
-        // for no_whitespace_and_symbol in no_whitespace_and_symbol_token {
-        //     heap.push(Reverse(no_whitespace_and_symbol));
-        //     // heap.push(no_whitespace_and_symbol);
-        // }
 
         let mut table = TokenTable::with_capacity(symbol_token.len() + no_whitespace_and_symbol_ranges.len() + quote_token.len());
         let mut symbol_offset = 0;
@@ -895,7 +883,7 @@ mod tests {
 
     #[test]
     fn test_match_string() {
-        let alloc = Bump::<64>::with_min_align();
+        let alloc = Bump::new();
         let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
         let mut lexer = SimdLexer::new("'helloWorld'", &keyword_matcher, &binding).unwrap();
@@ -908,13 +896,13 @@ mod tests {
             }
         );
 
-        let mut lexer = SimdLexer::new(r#"'hello\\'World'"#, &keyword_matcher, &binding).unwrap();
+        let mut lexer = SimdLexer::new(r#"'hello\'World'"#, &keyword_matcher, &binding).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
             TokenTable {
                 tokens: vec![TokenKind::StringLiteral],
-                positions: vec![(0, 14)],
+                positions: vec![(0, 13)],
             }
         );
 
@@ -951,7 +939,7 @@ mod tests {
 
     #[test]
     fn test_match_indentify() {
-        let alloc = Bump::<64>::with_min_align();
+        let alloc = Bump::new();
         let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
         let mut lexer = SimdLexer::new("asdfghjk", &keyword_matcher, &binding).unwrap();
@@ -975,14 +963,14 @@ mod tests {
             token,
             TokenTable {
                 tokens: vec![TokenKind::Identifier, TokenKind::Number],
-                positions: vec![(0, 36), (38, 48)],
+                positions: vec![(0, 36), (38, 47)],
             }
         );
     }
 
     #[test]
     fn test_keyword() {
-        let alloc = Bump::<64>::with_min_align();
+        let alloc = Bump::new();
         let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
         let mut lexer = SimdLexer::new("select from", &keyword_matcher, &binding).unwrap();
@@ -1001,7 +989,7 @@ mod tests {
 
     #[test]
     fn test_sql() {
-        let alloc = Bump::<64>::with_min_align();
+        let alloc = Bump::new();
         let binding = &alloc;
         let keyword_matcher = KeywordMatcher::new();
         let mut lexer = SimdLexer::new("select * from a", &keyword_matcher, &binding).unwrap();

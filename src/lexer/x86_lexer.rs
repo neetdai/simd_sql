@@ -401,11 +401,19 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
                     kind: TokenKind::Number,
                 });
             } else {
-                list.push(TokenItem {
-                    start: *start,
-                    end: *end,
-                    kind: TokenKind::Identifier,
-                });
+                if let Some(keyword) = self.maybe_keyword(&self.inner[*start..=*end]) {
+                    list.push(TokenItem {
+                        start: *start,
+                        end: *end,
+                        kind: TokenKind::Keyword(keyword),
+                    });
+                } else {
+                    list.push(TokenItem {
+                        start: *start,
+                        end: *end,
+                        kind: TokenKind::Identifier,
+                    });
+                }
             }
         }
 

@@ -29,7 +29,7 @@ impl<A: Allocator> Parser<A> {
                 let mut lexer = SimdLexer::new(&text, &self.keyword_matcher, &self.allocator)?;
                 lexer.tokenize()?
             } else {
-                let mut lexer = Lexer::new(&text, &self.keyword_matcher)?;
+                let mut lexer = Lexer::new(&text, &self.keyword_matcher, &self.allocator)?;
                 lexer.tokenize()?
             }
         };

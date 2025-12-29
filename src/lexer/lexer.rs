@@ -1,7 +1,5 @@
 use std::{
-    iter::Peekable,
-    process::Termination,
-    str::{CharIndices, FromStr},
+    alloc::Allocator, iter::Peekable, process::Termination, str::{CharIndices, FromStr}
 };
 
 use crate::{
@@ -11,20 +9,22 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub(crate) struct Lexer<'a> {
+pub(crate) struct Lexer<'a, A: Allocator> {
     inner: Peekable<CharIndices<'a>>,
     text: &'a str,
     position: usize,
     keyword_matcher: &'a KeywordMatcher,
+    allocator: &'a A,
 }
 
-impl<'a> Lexer<'a> {
-    pub(crate) fn new(text: &'a str, keyword_matcher: &'a KeywordMatcher) -> Result<Self, ParserError> {
+impl<'a, A: Allocator> Lexer<'a, A> {
+    pub(crate) fn new(text: &'a str, keyword_matcher: &'a KeywordMatcher, allocator: &'a A) -> Result<Self, ParserError> {
         Ok(Self {
             inner: text.char_indices().peekable(),
             text,
             position: 0,
             keyword_matcher,
+            allocator,
         })
     }
 
@@ -71,7 +71,7 @@ impl<'a> Lexer<'a> {
 
     // 可能是关键词
     fn maybe_keyword(&self, source: &str) -> Option<Keyword> {
-        self.keyword_matcher.match_keyword(source.as_bytes())
+        self.keyword_matcher.match_keyword(source.as_bytes(), self.allocator)
         // let len = source.len();
         // let tmp = source
         //     .chars()
@@ -284,13 +284,17 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
+    use bumpalo::Bump;
+
     use super::*;
     use crate::token::{TokenKind, TokenTable};
 
     #[test]
     fn test_skip_whitespace() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("   \t\n   hello", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("   \t\n   hello", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -304,7 +308,9 @@ mod tests {
     #[test]
     fn test_match_number() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("12345", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("12345", &keyword_matcher, &binding).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -314,7 +320,7 @@ mod tests {
             }
         );
 
-        let mut lexer = Lexer::new("-12345", &keyword_matcher).unwrap();
+        let mut lexer = Lexer::new("-12345", &keyword_matcher, &binding).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -328,7 +334,9 @@ mod tests {
     #[test]
     fn test_match_string() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("helloWorld", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("helloWorld", &keyword_matcher, &binding).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
@@ -342,7 +350,9 @@ mod tests {
     #[test]
     fn test_tokenize_numbers() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("123 456", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("123 456", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -356,7 +366,9 @@ mod tests {
     #[test]
     fn test_tokenize_strings() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("hello world", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("hello world", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -370,7 +382,9 @@ mod tests {
     #[test]
     fn test_tokenize_punctuation() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("(),'\"\\;'", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("(),'\"\\;'", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -389,7 +403,9 @@ mod tests {
     #[test]
     fn test_tokenize_mixed() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("func(123, 'abc');", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("func(123, 'abc');", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -411,7 +427,9 @@ mod tests {
     #[test]
     fn test_tokenize_cmp() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("a > b >= c < d <= e <> f = g", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("a > b >= c < d <= e <> f = g", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -453,7 +471,9 @@ mod tests {
     #[test]
     fn test_tokenize_unknown() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("@#$", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("@#$", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -467,7 +487,9 @@ mod tests {
     #[test]
     fn test_empty_input() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -481,7 +503,9 @@ mod tests {
     #[test]
     fn test_whitespace_handling() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("  hello   world  ", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("  hello   world  ", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -495,7 +519,9 @@ mod tests {
     #[test]
     fn test_tokenize_line_break() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("\n", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("\n", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -509,7 +535,9 @@ mod tests {
     #[test]
     fn test_keyword() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("select from", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("select from", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,
@@ -526,7 +554,9 @@ mod tests {
     #[test]
     fn test_sql() {
         let keyword_matcher = KeywordMatcher::new();
-        let mut lexer = Lexer::new("select * from a", &keyword_matcher).unwrap();
+        let alloc = Bump::new();
+        let binding = &alloc;
+        let mut lexer = Lexer::new("select * from a", &keyword_matcher, &binding).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,

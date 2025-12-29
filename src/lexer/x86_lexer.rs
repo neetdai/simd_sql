@@ -266,7 +266,7 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
 
     // 可能是关键词
     fn maybe_keyword(&self, source: &[u8]) -> Option<Keyword> {
-        self.keyword_matcher.match_keyword(source)
+        self.keyword_matcher.match_keyword(source, self.allocator)
         // let len = source.len();
         // let list = self.keyword_matcher.get(len)?;
 

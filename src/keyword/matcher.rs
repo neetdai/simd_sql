@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::VecDeque, simd::{Simd, cmp::SimdPartialOrd}};
+use std::{alloc::Allocator, cmp::Ordering, collections::VecDeque, simd::{Simd, cmp::SimdPartialOrd}};
 
 use minivec::MiniVec;
 use strum::VariantArray;
@@ -33,9 +33,9 @@ impl KeywordMatcher {
         }
     }
 
-    pub(crate) fn match_keyword(&self, bytes: &[u8]) -> Option<Keyword> {
+    pub(crate) fn match_keyword<A>(&self, bytes: &[u8], allocator: &A) -> Option<Keyword> where A: Allocator{
         // let upper_bytes = bytes.to_ascii_uppercase();
-        let upper_bytes = Self::to_ascii_uppercase(bytes);
+        let upper_bytes = Self::to_ascii_uppercase(bytes, allocator);
 
         if upper_bytes.len() == 2 {
             return  self.ultra_short_matcher.match_keyword(&upper_bytes);
@@ -46,9 +46,9 @@ impl KeywordMatcher {
         }
     }
 
-    fn to_ascii_uppercase(bytes: &[u8]) -> Vec<u8> {
+    fn to_ascii_uppercase<'a, A>(bytes: &'a [u8], allocator: &'a A) -> Vec<u8, &'a A> where A: Allocator {
         let len = bytes.len();
-        let mut result = Vec::with_capacity(len);
+        let mut result = Vec::with_capacity_in(len, allocator);
         let mut pos = 0;
 
         while pos + 32 < len {

@@ -377,14 +377,37 @@ impl<'a, A: Allocator> SimdLexer<'a, A> {
 
         for (start, end) in arr {
             let bytes = &self.inner[*start..=*end];
-            if let Some(kind) = symbol_map.get(bytes) {
-                // list.push(((*start, *end), kind.clone()));
-                list.push(TokenItem {
-                    start: *start,
-                    end: *end,
-                    kind: kind.clone(),
-                });
-            }
+            // if let Some(kind) = symbol_map.get(bytes) {
+            //     // list.push(((*start, *end), kind.clone()));
+            //     list.push(TokenItem {
+            //         start: *start,
+            //         end: *end,
+            //         kind: kind.clone(),
+            //     });
+            // }
+            let kind = match bytes {
+                b"+" => TokenKind::Plus,
+                b"-" => TokenKind::Subtract,
+                b"*" => TokenKind::Multiply,
+                b"/" => TokenKind::Divide,
+                b"%" => TokenKind::Mod,
+                b"(" => TokenKind::LeftParen,
+                b")" => TokenKind::RightParen,
+                b"<" => TokenKind::Less,
+                b"<>" => TokenKind::NotEqual,
+                b"<=" => TokenKind::LessEqual,
+                b">" => TokenKind::Greater,
+                b">=" => TokenKind::GreaterEqual,
+                b"=" => TokenKind::Equal,
+                b"," => TokenKind::Comma,
+                _ => continue,
+            };
+
+            list.push(TokenItem {
+                start: *start,
+                end: *end,
+                kind: kind.clone(),
+            });
         }
 
         list

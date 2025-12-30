@@ -41,6 +41,30 @@ WHERE u.active = 1 AND o.status = 'completed';";
             parser.parse(black_box(&i)).unwrap();
         });
     });
+
+    let sql_4 = "SELECT id,
+       CASE 
+           WHEN score >= 90 THEN 'A'
+           WHEN score >= 80 THEN 'B'
+           WHEN score >= 70 THEN 'C'
+           WHEN score >= 60 THEN 'D'
+           ELSE 'F'
+       END as grade,
+       CASE department
+           WHEN 'IT' THEN 'Technology'
+           WHEN 'HR' THEN 'Human Resources'
+           WHEN 'FIN' THEN 'Finance'
+           ELSE 'Other'
+       END as dept_full_name
+FROM students;";
+
+    let sql_len_4 = sql_4.len();
+    group.throughput(Throughput::Elements(sql_4.len() as u64));
+    group.bench_with_input(BenchmarkId::new("sql parser 4", sql_len_4), sql_4, |b, i| {
+        b.iter(|| {
+            parser.parse(black_box(&i)).unwrap();
+        });
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);

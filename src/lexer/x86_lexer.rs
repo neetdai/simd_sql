@@ -53,39 +53,39 @@ impl<'a> SimdLexer<'a> {
                     break;
                 }
             }
+        }
 
-            if is_x86_feature_detected!("sse4.2") {
-                while pos + 16 < length {
-                    let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos+16]);
+        if is_x86_feature_detected!("sse4.2") {
+            while pos + 16 < length {
+                let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos+16]);
 
-                    let space = Simd::<u8, 16>::splat(b' ');
-                    let tab = Simd::<u8, 16>::splat(b'\t');
-                    let newline = Simd::<u8, 16>::splat(b'\n');
-                    let cr = Simd::<u8, 16>::splat(b'\r');
+                let space = Simd::<u8, 16>::splat(b' ');
+                let tab = Simd::<u8, 16>::splat(b'\t');
+                let newline = Simd::<u8, 16>::splat(b'\n');
+                let cr = Simd::<u8, 16>::splat(b'\r');
 
-                    let mask = slice.simd_eq(space) | slice.simd_eq(tab) | slice.simd_eq(newline) | slice.simd_eq(cr);
-                    if mask.all() {
-                        pos += 16;
-                    } else {
-                        let result = (!mask).to_bitmask();
-                        let index = result.trailing_zeros() as usize;
-                        pos += index;
+                let mask = slice.simd_eq(space) | slice.simd_eq(tab) | slice.simd_eq(newline) | slice.simd_eq(cr);
+                if mask.all() {
+                    pos += 16;
+                } else {
+                    let result = (!mask).to_bitmask();
+                    let index = result.trailing_zeros() as usize;
+                    pos += index;
 
-                        break;
-                    }
-                }
-            }
-
-            let tmp_pos = pos;
-            for index in tmp_pos..length {
-                let c = &self.inner[index];
-                if *c != b' ' && *c != b'\t' && *c != b'\r' && *c != b'\n' {
                     break;
                 }
-                pos += 1;
             }
-            self.position = pos;
         }
+
+        let tmp_pos = pos;
+        for index in tmp_pos..length {
+            let c = &self.inner[index];
+            if *c != b' ' && *c != b'\t' && *c != b'\r' && *c != b'\n' {
+                break;
+            }
+            pos += 1;
+        }
+        self.position = pos;
     }
 
     #[inline]

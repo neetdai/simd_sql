@@ -120,7 +120,7 @@ impl<'a> Lexer<'a> {
     // 词法分析主函数
     #[inline]
     pub(crate) fn tokenize(&mut self) -> Result<TokenTable, ParserError> {
-        let mut table = TokenTable::new();
+        let mut table = TokenTable::with_capacity(self.text.len() / 4);
 
         loop {
             self.skip_whitespace();

@@ -1,6 +1,7 @@
 use crate::keyword::Keyword;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[repr(u16)]
 pub(crate) enum TokenKind {
     Number,
     StringLiteral,

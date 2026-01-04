@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use minivec::{MiniVec, mini_vec};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[repr(u16)]
 pub enum Keyword {
     Select,
     From,

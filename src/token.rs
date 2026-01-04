@@ -6,6 +6,7 @@ pub(crate) enum TokenKind {
     StringLiteral,
     Identifier,
     Eof,
+    Dot,
     LeftParen,
     RightParen,
     BackSlash,
@@ -36,6 +37,13 @@ impl TokenTable {
         Self {
             tokens: Vec::new(),
             positions: Vec::new(),
+        }
+    }
+
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
+        Self {
+            tokens: Vec::with_capacity(capacity),
+            positions: Vec::with_capacity(capacity),
         }
     }
 

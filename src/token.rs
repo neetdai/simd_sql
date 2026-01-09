@@ -1,3 +1,5 @@
+use std::slice::SliceIndex;
+
 use crate::keyword::Keyword;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,5 +53,18 @@ impl TokenTable {
     pub(crate) fn push(&mut self, kind: TokenKind, start: usize, end: usize) {
         self.tokens.push(kind);
         self.positions.push((start, end));
+    }
+
+    pub(crate) fn get_kind<I>(&self, index: I) -> Option<&I::Output> where I: SliceIndex<[TokenKind]> {
+        self.tokens.get(index)
+    }
+
+    pub(crate) fn get_position<I>(&self, index: I) -> Option<&I::Output> where I: SliceIndex<[(usize, usize)]> {
+        self.positions.get(index)
+    }
+
+    pub(crate) fn get_entry(&self, index: usize) -> Option<(&TokenKind, &(usize, usize))> {
+        self.tokens.get(index)
+            .zip(self.positions.get(index))
     }
 }

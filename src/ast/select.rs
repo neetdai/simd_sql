@@ -1,25 +1,19 @@
-use std::string::ParseError;
+use std::{alloc::Allocator};
 
-use crate::{expr::Expr, token::TokenTable};
+use crate::{Expr, keyword::Keyword, token::{TokenKind, TokenTable}, ParserError};
 
 
 #[derive(Debug)]
-pub struct SelectStatement {
-    columns: Vec<Expr>,
+pub struct SelectStatement<A> where A:Allocator {
+    columns: Vec<Expr, A>,
     // table: Expr,
 }
 
-impl SelectStatement {
-    pub fn new(tokenTable: &TokenTable) -> Result<Self, ParseError> {
-        let mut cursor = 0usize;
+impl<A> SelectStatement<A> where A: Allocator {
+    pub fn new(token_table: &TokenTable, cursor: &mut usize, allocator: A) -> Result<Self, ParserError> {
 
         Ok(Self {
-            columns: Vec::new(),
+            columns: Vec::new_in(allocator),
         })
-    }
-
-    fn parse_columns(tokenTable: &TokenTable, cursor: &mut usize) -> Result<(), ParseError> {
-        
-        Ok(())
     }
 }

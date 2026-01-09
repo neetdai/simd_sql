@@ -11,4 +11,7 @@ pub enum ParserError {
 
     #[error("invalid token from `{0}` to `{1}`")]
     InvalidToken(usize, usize),
+
+    #[error("syntax error from `{0}` to `{1}`")]
+    SyntaxError(usize, usize),
 }

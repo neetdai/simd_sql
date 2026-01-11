@@ -43,7 +43,6 @@ impl<T> FromToken for Alias<T> where T: FromToken {
                 }
             }
             Some(TokenKind::Identifier) => {
-                *cursor += 1;
                 if let Some((TokenKind::Identifier, (start, end))) = token_table.get_entry(*cursor) {
                     *cursor += 1;
                     Ok(Alias { name: Some((*start, *end)), value })
@@ -148,5 +147,22 @@ mod test {
             }
         }));
         assert_eq!(cursor, 5);
+
+        let mut token_table = TokenTable::with_capacity(3);
+        token_table.push(TokenKind::Identifier, 0, 1); // prefix
+        token_table.push(TokenKind::Dot, 2, 2);
+        token_table.push(TokenKind::Identifier, 3, 4); // value
+        token_table.push(TokenKind::Identifier, 5, 6); // alias
+        
+        let mut cursor = 0;
+        let expr = Expr::class_column(&token_table, &mut cursor).unwrap();
+        assert_eq!(expr, Expr::Column(Alias {
+            name: Some((5, 6)),
+            value:  Column {
+                prefix: Some((0, 1)),
+                value: (3, 4),
+            }
+        }));
+        assert_eq!(cursor, 4);
     }
 }

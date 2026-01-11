@@ -3,7 +3,7 @@ use std::{alloc::Allocator, borrow::Cow};
 use crate::{ParserError, keyword::Keyword, token::{TokenKind, TokenTable}};
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Expr {
     Column(Alias<Column>),
     Field(Field),
@@ -23,7 +23,7 @@ trait FromToken {
     fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> where Self: Sized;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Alias<T> {
     name: Option<(usize, usize)>,
     value: T,
@@ -39,7 +39,7 @@ impl<T> FromToken for Alias<T> where T: FromToken {
                     *cursor += 1;
                     Ok(Alias { name: Some((*start, *end)), value })
                 } else {
-                    Ok(Alias { name: None, value })
+                    Err(ParserError::SyntaxError(*cursor, *cursor))
                 }
             }
             Some(TokenKind::Identifier) => {
@@ -52,13 +52,13 @@ impl<T> FromToken for Alias<T> where T: FromToken {
                 }
             },
             _ => {
-                Err(ParserError::SyntaxError(*cursor, *cursor))
+                Ok(Alias { name: None, value })
             }
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Field {
     prefix: Option<(usize, usize)>,
     value: (usize, usize),
@@ -67,13 +67,15 @@ pub struct Field {
 impl FromToken for Field {
     fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> where Self: Sized {
         match token_table.get_entry(*cursor) {
-            Some((TokenKind::Identifier, (start, end))) => {
+            Some((TokenKind::Identifier, (current_start, current_end))) => {
                 *cursor += 1;
-                if let Some((TokenKind::Identifier, (start, end))) = token_table.get_entry(*cursor) {
+                if let Some([TokenKind::Dot, TokenKind::Identifier]) = token_table.get_kind(*cursor..=*cursor + 1) {
                     *cursor += 1;
-                    Ok(Field { prefix: Some((*start, *end)), value: (*start, *end) })
+                    let (start, end) = token_table.get_position(*cursor).unwrap();
+                    *cursor += 1;
+                    Ok(Self { prefix: Some((*current_start, *current_end)), value: (*start, *end) })
                 } else {
-                    Ok(Field { prefix: None, value: (*start, *end) })
+                    Ok(Self { prefix: None, value: (*current_start, *current_end) })
                 }
             }
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
@@ -81,7 +83,7 @@ impl FromToken for Field {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Column {
     prefix: Option<(usize, usize)>,
     value: (usize, usize),
@@ -90,16 +92,61 @@ pub struct Column {
 impl FromToken for Column {
     fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> where Self: Sized {
         match token_table.get_entry(*cursor) {
-            Some((TokenKind::Identifier, (start, end))) => {
+            Some((TokenKind::Identifier, (current_start, current_end))) => {
                 *cursor += 1;
-                if let Some((TokenKind::Identifier, (start, end))) = token_table.get_entry(*cursor) {
+                if let Some([TokenKind::Dot, TokenKind::Identifier]) = token_table.get_kind(*cursor..=*cursor + 1) {
                     *cursor += 1;
-                    Ok(Self { prefix: Some((*start, *end)), value: (*start, *end) })
+                    let (start, end) = token_table.get_position(*cursor).unwrap();
+                    *cursor += 1;
+                    Ok(Self { prefix: Some((*current_start, *current_end)), value: (*start, *end) })
                 } else {
-                    Ok(Self { prefix: None, value: (*start, *end) })
+                    Ok(Self { prefix: None, value: (*current_start, *current_end) })
                 }
             }
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{Expr, common::{Alias, Column}, keyword::Keyword, token::{TokenKind, TokenTable}};
+
+
+    #[test]
+    fn test_column() {
+        let mut token_table = TokenTable::with_capacity(3);
+        token_table.push(TokenKind::Identifier, 0, 1); // prefix
+        token_table.push(TokenKind::Dot, 2, 2);
+        token_table.push(TokenKind::Identifier, 3, 4); // value
+        
+        let mut cursor = 0;
+        let expr = Expr::class_column(&token_table, &mut cursor).unwrap();
+        assert_eq!(expr, Expr::Column(Alias {
+            name: None,
+            value:  Column {
+                prefix: Some((0, 1)),
+                value: (3, 4),
+            }
+        }));
+        assert_eq!(cursor, 3);
+
+        let mut token_table = TokenTable::with_capacity(3);
+        token_table.push(TokenKind::Identifier, 0, 1); // prefix
+        token_table.push(TokenKind::Dot, 2, 2);
+        token_table.push(TokenKind::Identifier, 3, 4); // value
+        token_table.push(TokenKind::Keyword(Keyword::As), 5, 6); // As
+        token_table.push(TokenKind::Identifier, 7, 8); // alias
+        
+        let mut cursor = 0;
+        let expr = Expr::class_column(&token_table, &mut cursor).unwrap();
+        assert_eq!(expr, Expr::Column(Alias {
+            name: Some((7, 8)),
+            value:  Column {
+                prefix: Some((0, 1)),
+                value: (3, 4),
+            }
+        }));
+        assert_eq!(cursor, 5);
     }
 }

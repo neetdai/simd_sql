@@ -8,6 +8,7 @@ simdutf8 = "0.1.5"
 thiserror = "2.0.17"
 bumpalo = "3.19.0"
 minivec = "0.5.0"
+strum = {version = "0.27.2", features = ["derive"]}
 
 [dev-dependencies]
 criterion = {version = "0.7.0", features = ["html_reports"]}

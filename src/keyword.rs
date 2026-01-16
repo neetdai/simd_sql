@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
+use strum::Display;
 
 use minivec::{MiniVec, mini_vec};
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display)]
 #[repr(u16)]
 pub enum Keyword {
     Select,

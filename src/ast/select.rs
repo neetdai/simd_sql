@@ -1,6 +1,6 @@
 use std::{alloc::Allocator};
 
-use crate::{Expr, keyword::Keyword, token::{TokenKind, TokenTable}, ParserError};
+use crate::{Expr, ParserError, common::expect_kind, keyword::Keyword, token::{TokenKind, TokenTable}};
 
 
 #[derive(Debug)]
@@ -15,5 +15,11 @@ impl<A> SelectStatement<A> where A: Allocator {
         Ok(Self {
             columns: Vec::new_in(allocator),
         })
+    }
+
+    fn build_ast(token_table: &TokenTable, cursor: &mut usize) -> Result<(), ParserError> {
+        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Select))?;
+
+        Ok(())
     }
 }

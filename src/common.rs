@@ -1,12 +1,23 @@
 use std::{alloc::Allocator, borrow::Cow};
 
+use minivec::MiniVec;
+
 use crate::{ParserError, keyword::Keyword, token::{TokenKind, TokenTable}};
 
+pub(crate) fn expect_kind(token_table: &TokenTable, cursor: &usize, token_kind: &TokenKind) -> Result<(), ParserError> {
+    if let Some(kind) = token_table.get_kind(*cursor) {
+        if kind != token_kind {
+            return Err(ParserError::UnexpectedToken { expected: token_kind.clone(), found: kind.clone() });
+        }
+    }
+    Ok(())
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Expr {
     Column(Alias<Column>),
     Field(Field),
+    FunctionCall(Alias<FunctionCall>),
 }
 
 impl Expr {
@@ -16,6 +27,10 @@ impl Expr {
 
     pub(crate) fn class_field(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         Field::from_token(token_table, cursor).map(Expr::Field)
+    }
+
+    pub(crate) fn class_function_call(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        Alias::<FunctionCall>::from_token(token_table, cursor).map(Expr::FunctionCall)
     }
 }
 
@@ -103,6 +118,51 @@ impl FromToken for Column {
                 }
             }
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FunctionCall {
+    name: (usize, usize),
+    args: MiniVec<Expr>,
+}
+
+impl FromToken for FunctionCall {
+    fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> where Self: Sized {
+        if let Some((TokenKind::Identifier, (start, end))) = token_table.get_entry(*cursor) {
+            *cursor += 1;
+            let name = (*start, *end);
+
+            expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
+
+            let mut args = MiniVec::with_capacity(8);
+            loop {
+                if let Some(TokenKind::RightParen) = token_table.get_kind(*cursor) {
+                    *cursor += 1;
+                    break;
+                }
+
+                let expr = Expr::class_column(token_table, cursor)?;
+                args.push(expr);
+
+                if let Some(TokenKind::Comma) = token_table.get_kind(*cursor) {
+                    *cursor += 1;
+                    continue;
+                } else if let Some(TokenKind::RightParen) = token_table.get_kind(*cursor) {
+                    *cursor += 1;
+                    break;
+                } else {
+                    return Err(ParserError::SyntaxError(*cursor, *cursor));
+                }
+            }
+
+            Ok(Self {
+                name: name,
+                args,
+            })
+        } else {
+            return Err(ParserError::SyntaxError(*cursor, *cursor));
         }
     }
 }

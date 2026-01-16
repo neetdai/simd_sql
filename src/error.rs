@@ -1,6 +1,8 @@
 use simdutf8::basic::Utf8Error;
 use thiserror::Error;
 
+use crate::token::TokenKind;
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ParserError {
     #[error("invalid utf-8")]
@@ -14,4 +16,7 @@ pub enum ParserError {
 
     #[error("syntax error from `{0}` to `{1}`")]
     SyntaxError(usize, usize),
+
+    #[error("unexpected token: expected `{expected}`, found `{found}`")]
+    UnexpectedToken { expected: TokenKind, found: TokenKind },
 }

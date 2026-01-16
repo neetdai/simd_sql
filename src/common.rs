@@ -18,6 +18,7 @@ pub enum Expr {
     Column(Alias<Column>),
     Field(Field),
     FunctionCall(Alias<FunctionCall>),
+    StringLiteral(StringLiteral),
 }
 
 impl Expr {
@@ -31,6 +32,34 @@ impl Expr {
 
     pub(crate) fn class_function_call(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         Alias::<FunctionCall>::from_token(token_table, cursor).map(Expr::FunctionCall)
+    }
+
+    pub(crate) fn class_string_literal(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        StringLiteral::from_token(token_table, cursor).map(Expr::StringLiteral)
+    }
+
+    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        match token_table.get_kind(*cursor) {
+            Some(TokenKind::Number) => {
+                todo!()
+            }
+            Some(TokenKind::StringLiteral) => {
+                Self::class_string_literal(token_table, cursor)
+            }
+            Some(TokenKind::Identifier) => {
+                match token_table.get_kind(*cursor) {
+                    Some(TokenKind::LeftParen) => {
+                        Self::class_function_call(token_table, cursor)
+                    }
+                    _ => {
+                        Self::class_field(token_table, cursor)
+                    }
+                }
+            }
+            _ => {
+                Err(ParserError::SyntaxError(*cursor, *cursor))
+            }
+        }
     }
 }
 
@@ -135,15 +164,11 @@ impl FromToken for FunctionCall {
             let name = (*start, *end);
 
             expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
+            *cursor += 1;
 
             let mut args = MiniVec::with_capacity(8);
             loop {
-                if let Some(TokenKind::RightParen) = token_table.get_kind(*cursor) {
-                    *cursor += 1;
-                    break;
-                }
-
-                let expr = Expr::class_column(token_table, cursor)?;
+                let expr = Expr::build(token_table, cursor)?;
                 args.push(expr);
 
                 if let Some(TokenKind::Comma) = token_table.get_kind(*cursor) {
@@ -167,9 +192,27 @@ impl FromToken for FunctionCall {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct StringLiteral {
+    value: (usize, usize),
+}
+
+impl FromToken for StringLiteral {
+    fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> where Self: Sized {
+        if let Some((TokenKind::StringLiteral, (start, end))) = token_table.get_entry(*cursor) {
+            *cursor += 1;
+            Ok(Self { value: (*start, *end) })
+        } else {
+            Err(ParserError::SyntaxError(*cursor, *cursor))
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use crate::{Expr, common::{Alias, Column}, keyword::Keyword, token::{TokenKind, TokenTable}};
+    use minivec::mini_vec;
+
+    use crate::{Expr, common::{Alias, Column, FunctionCall, StringLiteral}, keyword::Keyword, token::{TokenKind, TokenTable}};
 
 
     #[test]
@@ -224,5 +267,25 @@ mod test {
             }
         }));
         assert_eq!(cursor, 4);
+    }
+
+    #[test]
+    fn test_function() {
+        let mut token_table = TokenTable::with_capacity(3);
+        token_table.push(TokenKind::Identifier, 0, 1); // name
+        token_table.push(TokenKind::LeftParen, 2, 2);
+        token_table.push(TokenKind::StringLiteral, 3,5);
+        token_table.push(TokenKind::RightParen, 6, 6); // args
+
+        let mut cursor = 0;
+        let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
+        assert_eq!(expr, Expr::FunctionCall(Alias { name: None, value: FunctionCall {
+            name: (0, 1),
+            args: mini_vec![
+                Expr::StringLiteral(StringLiteral {
+                    value: (3, 5)
+                })
+            ]
+        } }))
     }
 }

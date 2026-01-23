@@ -89,22 +89,14 @@ pub struct BinaryOp {
 
 #[derive(Debug, PartialEq)]
 pub enum Expr {
-    Column(Alias<Column>),
     Field(Field),
-    FunctionCall(Alias<FunctionCall>),
+    FunctionCall(FunctionCall),
     StringLiteral(StringLiteral),
     NumbericLiteral(NumbericLiteral),
     BinaryOp(Box<BinaryOp>),
 }
 
 impl Expr {
-    pub(crate) fn class_column(
-        token_table: &TokenTable,
-        cursor: &mut usize,
-    ) -> Result<Self, ParserError> {
-        Alias::<Column>::from_token(token_table, cursor).map(Expr::Column)
-    }
-
     pub(crate) fn class_field(
         token_table: &TokenTable,
         cursor: &mut usize,
@@ -116,7 +108,7 @@ impl Expr {
         token_table: &TokenTable,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
-        Alias::<FunctionCall>::from_token(token_table, cursor).map(Expr::FunctionCall)
+        FunctionCall::from_token(token_table, cursor).map(Expr::FunctionCall)
     }
 
     pub(crate) fn class_string_literal(
@@ -231,20 +223,14 @@ trait FromToken {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Alias<T> {
+pub struct Alias {
     name: Option<usize>,
-    value: T,
+    value: Expr,
 }
 
-impl<T> FromToken for Alias<T>
-where
-    T: FromToken,
-{
-    fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError>
-    where
-        Self: Sized,
-    {
-        let value = T::from_token(token_table, cursor)?;
+impl Alias {
+    fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        let value = Expr::build(token_table, cursor)?;
         match token_table.get_kind(*cursor) {
             Some(TokenKind::Keyword(Keyword::As)) => {
                 *cursor += 1;
@@ -513,7 +499,7 @@ mod test {
 
     use crate::{
         Expr, ParserError,
-        common::{Alias, BinaryOp, BinaryOperator, Column, FunctionCall, StringLiteral},
+        common::{Alias, BinaryOp, BinaryOperator, Column, Field, FunctionCall, StringLiteral},
         keyword::Keyword,
         token::{TokenKind, TokenTable},
     };
@@ -526,15 +512,12 @@ mod test {
         token_table.push(TokenKind::Identifier, 3, 4); // value
 
         let mut cursor = 0;
-        let expr = Expr::class_column(&token_table, &mut cursor).unwrap();
+        let expr = Expr::class_field(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
-            Expr::Column(Alias {
-                name: None,
-                value: Column {
-                    prefix: Some(0),
-                    value: 2,
-                }
+            Expr::Field(Field {
+                prefix: Some(0),
+                value: 2,
             })
         );
         assert_eq!(cursor, 3);
@@ -547,16 +530,16 @@ mod test {
         token_table.push(TokenKind::Identifier, 7, 8); // alias
 
         let mut cursor = 0;
-        let expr = Expr::class_column(&token_table, &mut cursor).unwrap();
+        let expr = Alias::new(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
-            Expr::Column(Alias {
+            Alias {
                 name: Some(4),
-                value: Column {
+                value: Expr::Field(Field {
                     prefix: Some(0),
                     value: 2,
-                }
-            })
+                })
+            }
         );
         assert_eq!(cursor, 5);
 
@@ -567,16 +550,16 @@ mod test {
         token_table.push(TokenKind::Identifier, 5, 6); // alias
 
         let mut cursor = 0;
-        let expr = Expr::class_column(&token_table, &mut cursor).unwrap();
+        let expr = Alias::new(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
-            Expr::Column(Alias {
+            Alias {
                 name: Some(3),
-                value: Column {
+                value: Expr::Field(Field {
                     prefix: Some(0),
                     value: 2,
-                }
-            })
+                })
+            }
         );
         assert_eq!(cursor, 4);
     }
@@ -593,12 +576,10 @@ mod test {
         let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
-            Expr::FunctionCall(Alias {
-                name: None,
-                value: FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                     name: 0,
                     args: mini_vec![Expr::StringLiteral(StringLiteral { value: 2 })]
-                }
+                
             })
         );
         assert_eq!(cursor, 4);
@@ -618,20 +599,18 @@ mod test {
         let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
-            Expr::FunctionCall(Alias {
-                name: None,
-                value: FunctionCall {
+            Expr::FunctionCall(FunctionCall {
                     name: 0,
                     args: mini_vec![
                         Expr::StringLiteral(StringLiteral { value: 2 }),
                         Expr::StringLiteral(StringLiteral { value: 4 })
                     ]
-                }
             })
         );
         assert_eq!(cursor, 6);
     }
 
+    
     #[test]
     fn test_function_should_panic_1() {
         let mut token_table = TokenTable::with_capacity(3);

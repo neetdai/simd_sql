@@ -229,7 +229,7 @@ pub struct Alias {
 }
 
 impl Alias {
-    fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    pub(crate) fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         let value = Expr::build(token_table, cursor)?;
         match token_table.get_kind(*cursor) {
             Some(TokenKind::Keyword(Keyword::As)) => {
@@ -610,7 +610,7 @@ mod test {
         assert_eq!(cursor, 6);
     }
 
-    
+
     #[test]
     fn test_function_should_panic_1() {
         let mut token_table = TokenTable::with_capacity(3);

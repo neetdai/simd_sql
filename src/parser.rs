@@ -1,7 +1,5 @@
 use crate::{
-    error::ParserError,
-    keyword::KeywordMap,
-    lexer::{Lexer, SimdLexer},
+    SelectStatement, error::ParserError, keyword::KeywordMap, lexer::{Lexer, SimdLexer}
 };
 use bumpalo::Bump;
 use simdutf8::basic::from_utf8;
@@ -31,6 +29,8 @@ impl Parser {
                 lexer.tokenize()?
             }
         };
+        let mut cursor = 0;
+        let select = SelectStatement::new(&tokentable, &mut cursor)?;
         Ok(())
     }
 }

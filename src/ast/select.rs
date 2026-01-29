@@ -25,7 +25,9 @@ impl SelectStatement {
         let mut columns = Vec::new();
         loop {
             match token_table.get_kind(*cursor) {
-                Some(TokenKind::Comma) => continue,
+                Some(TokenKind::Comma) => {
+                    *cursor += 1;
+                },
                 Some(TokenKind::Keyword(_)) => break,
                 Some(_) => {
                     let expr = Alias::new(token_table, cursor)?;

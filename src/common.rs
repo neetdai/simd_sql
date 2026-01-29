@@ -24,6 +24,14 @@ pub(crate) fn expect_kind(
     Ok(())
 }
 
+pub(crate) fn maybe_kind(token_table: &TokenTable, cursor: &usize, token_kind: &TokenKind) -> bool {
+    if let Some(kind) = token_table.get_kind(*cursor) {
+        kind == token_kind
+    } else {
+        false
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BinaryOperator {
     Add,
@@ -90,6 +98,7 @@ pub struct BinaryOp {
 #[derive(Debug, PartialEq)]
 pub enum Expr {
     Field(Field),
+    Star(Star),
     FunctionCall(FunctionCall),
     StringLiteral(StringLiteral),
     NumbericLiteral(NumbericLiteral),
@@ -123,6 +132,13 @@ impl Expr {
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         NumbericLiteral::from_token(token_table, cursor).map(Expr::NumbericLiteral)
+    }
+
+    pub(crate) fn class_star(
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
+        Star::from_token(token_table, cursor).map(Expr::Star)
     }
 
     /// 使用 Pratt Parser 解析表达式
@@ -196,9 +212,16 @@ impl Expr {
                 if let Some(TokenKind::LeftParen) = token_table.get_kind(*cursor + 1) {
                     Self::class_function_call(token_table, cursor)
                 } else {
-                    Self::class_field(token_table, cursor)
+                    if let Ok(star) = Self::class_star(token_table, cursor) {
+                        return Ok(star);
+                    } else {
+                        Self::class_field(token_table, cursor)
+                    }
                 }
             }
+            Some(TokenKind::Multiply) => {
+                Self::class_star(token_table, cursor)
+            },
             Some(TokenKind::LeftParen) => {
                 // 处理括号表达式
                 *cursor += 1;
@@ -316,12 +339,11 @@ impl FromToken for Field {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Column {
-    prefix: Option<usize>,
-    value: usize,
+pub struct Star {
+    pub prefix: Option<usize>,
 }
 
-impl FromToken for Column {
+impl FromToken for Star {
     fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError>
     where
         Self: Sized,
@@ -330,41 +352,30 @@ impl FromToken for Column {
             .get_kind(*cursor)
             .map(|kind| kind == &TokenKind::Identifier)
             .unwrap_or(false);
+        let first_star = token_table
+            .get_kind(*cursor)
+            .map(|kind| kind == &TokenKind::Multiply)
+            .unwrap_or(false);
         let dot = token_table
             .get_kind(*cursor + 1)
             .map(|kind| kind == &TokenKind::Dot)
             .unwrap_or(false);
         let second = token_table
             .get_kind(*cursor + 2)
-            .map(|kind| kind == &TokenKind::Identifier)
+            .map(|kind| kind == &TokenKind::Multiply)
             .unwrap_or(false);
 
-        let sum = (first as usize) + (dot as usize) + (second as usize);
+        let sum = ((first || first_star) as usize) + (dot as usize) + (second as usize);
 
-        let (prefix, value) = match (first, sum) {
-            (true, 1) => (None, *cursor),
-            (true, 3) => (Some(*cursor), *cursor + 2),
+        let prefix = match (first_star, first, sum) {
+            (true, false, 1) => None,
+            (false, true, 3) => Some(*cursor),
             _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
         };
 
         *cursor += sum;
 
-        Ok(Self { prefix, value })
-
-        // match token_table.get_entry(*cursor) {
-        //     Some((TokenKind::Identifier, (current_start, current_end))) => {
-        //         *cursor += 1;
-        //         if let Some([TokenKind::Dot, TokenKind::Identifier]) = token_table.get_kind(*cursor..=*cursor + 1) {
-        //             *cursor += 1;
-        //             let (start, end) = token_table.get_position(*cursor).unwrap();
-        //             *cursor += 1;
-        //             Ok(Self { prefix: Some((*current_start, *current_end)), value: (*start, *end) })
-        //         } else {
-        //             Ok(Self { prefix: None, value: (*current_start, *current_end) })
-        //         }
-        //     }
-        //     _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
-        // }
+        Ok(Self { prefix })
     }
 }
 
@@ -499,7 +510,7 @@ mod test {
 
     use crate::{
         Expr, ParserError,
-        common::{Alias, BinaryOp, BinaryOperator, Column, Field, FunctionCall, StringLiteral},
+        common::{Alias, BinaryOp, BinaryOperator, Field, FunctionCall, StringLiteral},
         keyword::Keyword,
         token::{TokenKind, TokenTable},
     };

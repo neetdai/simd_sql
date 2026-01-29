@@ -1,24 +1,26 @@
 use std::{alloc::Allocator};
 
-use crate::{Expr, ParserError, common::{Alias, expect_kind}, keyword::Keyword, token::{TokenKind, TokenTable}};
+use crate::{Expr, ParserError, common::{Alias, expect_kind, maybe_kind}, keyword::Keyword, token::{TokenKind, TokenTable}};
 
 
 #[derive(Debug)]
-pub struct SelectStatement<A> where A:Allocator {
-    columns: Vec<Alias, A>,
+pub struct SelectStatement {
+    columns: Vec<Alias>,
     // table: Expr,
 }
 
-impl<A> SelectStatement<A> where A: Allocator {
-    pub fn new(token_table: &TokenTable, cursor: &mut usize, allocator: A) -> Result<Self, ParserError> {
+impl SelectStatement {
+    pub fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
 
-        Ok(Self {
-            columns: Vec::new_in(allocator),
-        })
+        // Ok(Self {
+        //     columns: Vec::new(),
+        // })
+        Self::build_ast(token_table, cursor)
     }
 
-    fn build_ast(token_table: &TokenTable, cursor: &mut usize) -> Result<(), ParserError> {
+    fn build_ast(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Select))?;
+        *cursor += 1;
 
         let mut columns = Vec::new();
         loop {
@@ -33,8 +35,13 @@ impl<A> SelectStatement<A> where A: Allocator {
             }
         }
 
-        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::From))?;
+        if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::From)) {
+            *cursor += 1;
+            
+        }
 
-        Ok(())
+        Ok(Self {
+            columns,
+        })
     }
 }

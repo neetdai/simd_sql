@@ -11,3 +11,4 @@ mod common;
 
 pub use {error::ParserError, parser::Parser};
 pub use common::Expr;
+pub use ast::select::SelectStatement;

@@ -309,11 +309,9 @@ impl FromToken for Field {
             .map(|kind| kind == &TokenKind::Identifier)
             .unwrap_or(false);
 
-        let sum = (first as usize) + (dot as usize) + (second as usize);
-
-        let (prefix, value) = match (first, sum) {
-            (true, 1) => (None, *cursor),
-            (true, 3) => (Some(*cursor), *cursor + 2),
+        let (prefix, value, sum) = match (first, dot , second) {
+            (true, false, _) => (None, *cursor, 1),
+            (true, true, true) => (Some(*cursor), *cursor + 2, 3),
             _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
         };
 
@@ -365,17 +363,17 @@ impl FromToken for Star {
             .map(|kind| kind == &TokenKind::Multiply)
             .unwrap_or(false);
 
-        let sum = ((first || first_star) as usize) + (dot as usize) + (second as usize);
+        if first_star {
+            *cursor += 1;
+            return Ok(Self { prefix: None });
+        } else if first && dot && second {
+            let prefix = *cursor;
+            *cursor += 3;
+            return Ok(Self { prefix: Some(prefix) });
+        } else {
+            return Err(ParserError::SyntaxError(*cursor, *cursor));
 
-        let prefix = match (first_star, first, sum) {
-            (true, false, 1) => None,
-            (false, true, 3) => Some(*cursor),
-            _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
-        };
-
-        *cursor += sum;
-
-        Ok(Self { prefix })
+        }
     }
 }
 
@@ -501,6 +499,31 @@ impl FromToken for NumbericLiteral {
         } else {
             Err(ParserError::SyntaxError(*cursor, *cursor))
         }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum From {
+    Table(Alias),
+    LeftJoin {
+        left: Alias,
+        right: Alias,
+        condition: Expr,
+    },
+    RightJoin {
+        left: Alias,
+        right: Alias,
+        condition: Expr,
+    },
+    InnerJoin {
+        left: Alias,
+        right: Alias,
+        condition: Expr,
+    },
+    FullJoin {
+        left: Alias,
+        right: Alias,
+        condition: Expr,
     }
 }
 

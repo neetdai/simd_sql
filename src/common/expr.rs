@@ -1,36 +1,15 @@
-use std::{alloc::Allocator, borrow::Cow};
-
 use minivec::MiniVec;
 
 use crate::{
-    ParserError,
+    common::{
+        alias::Aliasable,
+        pratt_parser::{PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
+        utils::expect_kind,
+    },
     keyword::Keyword,
-    token::{self, TokenKind, TokenTable},
+    token::{TokenKind, TokenTable},
+    ParserError,
 };
-
-pub(crate) fn expect_kind(
-    token_table: &TokenTable,
-    cursor: &usize,
-    token_kind: &TokenKind,
-) -> Result<(), ParserError> {
-    if let Some(kind) = token_table.get_kind(*cursor) {
-        if kind != token_kind {
-            return Err(ParserError::UnexpectedToken {
-                expected: token_kind.clone(),
-                found: kind.clone(),
-            });
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn maybe_kind(token_table: &TokenTable, cursor: &usize, token_kind: &TokenKind) -> bool {
-    if let Some(kind) = token_table.get_kind(*cursor) {
-        kind == token_kind
-    } else {
-        false
-    }
-}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BinaryOperator {
@@ -69,22 +48,31 @@ impl BinaryOperator {
             _ => None,
         }
     }
+}
 
+impl PrecedenceTrait for BinaryOperator {
     /// 获取运算符的优先级，数值越大优先级越高
-    pub fn precedence(&self) -> u8 {
+    fn precedence(&self) -> usize {
         match self {
             BinaryOperator::Or => 1,
             BinaryOperator::And => 2,
             BinaryOperator::Equal | BinaryOperator::NotEqual => 3,
-            BinaryOperator::Less | BinaryOperator::LessEqual | BinaryOperator::Greater | BinaryOperator::GreaterEqual => 4,
+            BinaryOperator::Less
+            | BinaryOperator::LessEqual
+            | BinaryOperator::Greater
+            | BinaryOperator::GreaterEqual => 4,
             BinaryOperator::Add | BinaryOperator::Subtract => 5,
             BinaryOperator::Multiply | BinaryOperator::Divide | BinaryOperator::Mod => 6,
         }
     }
 
     /// 判断是否是左结合的运算符
-    pub fn is_left_associative(&self) -> bool {
+    fn is_left_associative(&self) -> bool {
         true // 所有二元运算符都是左结合的
+    }
+
+    fn min_precedence() -> usize {
+        0
     }
 }
 
@@ -146,64 +134,119 @@ impl Expr {
         token_table: &TokenTable,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
-        Self::parse_expression_with_min_precedence(token_table, cursor, 0)
+        PrattParser::parse_expression::<Self>(token_table, cursor)
     }
 
-    /// 使用 Pratt Parser 解析表达式，支持指定最小优先级
-    fn parse_expression_with_min_precedence(
-        token_table: &TokenTable,
-        cursor: &mut usize,
-        min_precedence: u8,
-    ) -> Result<Self, ParserError> {
-        // 解析左侧表达式（原子表达式）
-        let mut left = Self::parse_primary(token_table, cursor)?;
+    // /// 使用 Pratt Parser 解析表达式，支持指定最小优先级
+    // fn parse_expression_with_min_precedence(
+    //     token_table: &TokenTable,
+    //     cursor: &mut usize,
+    //     min_precedence: u8,
+    // ) -> Result<Self, ParserError> {
+    //     // 解析左侧表达式（原子表达式）
+    //     let mut left = Self::parse_primary(token_table, cursor)?;
 
-        // 循环处理二元运算符
-        loop {
-            // 检查当前 token 是否是二元运算符
-            let op = match token_table.get_kind(*cursor).and_then(|kind| BinaryOperator::from_token_kind(kind)) {
-                Some(op) => op,
-                None => break,
-            };
+    //     // 循环处理二元运算符
+    //     loop {
+    //         // 检查当前 token 是否是二元运算符
+    //         let op = match token_table.get_kind(*cursor).and_then(|kind| BinaryOperator::from_token_kind(kind)) {
+    //             Some(op) => op,
+    //             None => break,
+    //         };
 
-            // 如果运算符优先级低于最小优先级，停止解析
-            if op.precedence() < min_precedence {
-                break;
-            }
+    //         // 如果运算符优先级低于最小优先级，停止解析
+    //         if op.precedence() < min_precedence {
+    //             break;
+    //         }
 
-            // 消耗运算符 token
-            *cursor += 1;
+    //         // 消耗运算符 token
+    //         *cursor += 1;
 
-            // 计算下一个表达式的最小优先级
-            let next_min_precedence = if op.is_left_associative() {
-                op.precedence() + 1
-            } else {
-                op.precedence()
-            };
+    //         // 计算下一个表达式的最小优先级
+    //         let next_min_precedence = if op.is_left_associative() {
+    //             op.precedence() + 1
+    //         } else {
+    //             op.precedence()
+    //         };
 
-            // 递归解析右侧表达式
-            let right = Self::parse_expression_with_min_precedence(
-                token_table,
-                cursor,
-                next_min_precedence,
-            )?;
+    //         // 递归解析右侧表达式
+    //         let right = Self::parse_expression_with_min_precedence(
+    //             token_table,
+    //             cursor,
+    //             next_min_precedence,
+    //         )?;
 
-            // 构建二元运算表达式
-            left = Expr::BinaryOp(Box::new(BinaryOp {
-                op,
-                left,
-                right,
-            }));
-        }
+    //         // 构建二元运算表达式
+    //         left = Expr::BinaryOp(Box::new(BinaryOp {
+    //             op,
+    //             left,
+    //             right,
+    //         }));
+    //     }
 
-        Ok(left)
+    //     Ok(left)
+    // }
+
+    // /// 解析原子表达式（最基础的表达式）
+    // fn parse_primary(
+    //     token_table: &TokenTable,
+    //     cursor: &mut usize,
+    // ) -> Result<Self, ParserError> {
+    //     match token_table.get_kind(*cursor) {
+    //         Some(TokenKind::Number) => Self::class_number_literal(token_table, cursor),
+    //         Some(TokenKind::StringLiteral) => Self::class_string_literal(token_table, cursor),
+    //         Some(TokenKind::Identifier) => {
+    //             // 检查是否是函数调用
+    //             if let Some(TokenKind::LeftParen) = token_table.get_kind(*cursor + 1) {
+    //                 Self::class_function_call(token_table, cursor)
+    //             } else {
+    //                 if let Ok(star) = Self::class_star(token_table, cursor) {
+    //                     return Ok(star);
+    //                 } else {
+    //                     Self::class_field(token_table, cursor)
+    //                 }
+    //             }
+    //         }
+    //         Some(TokenKind::Multiply) => {
+    //             Self::class_star(token_table, cursor)
+    //         },
+    //         Some(TokenKind::LeftParen) => {
+    //             // 处理括号表达式
+    //             *cursor += 1;
+    //             let expr = Self::parse_expression(token_table, cursor)?;
+    //             expect_kind(token_table, cursor, &TokenKind::RightParen)?;
+    //             *cursor += 1;
+    //             Ok(expr)
+    //         }
+    //         _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
+    //     }
+    // }
+
+    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        Self::parse_expression(token_table, cursor)
     }
+}
 
-    /// 解析原子表达式（最基础的表达式）
+impl Aliasable for Expr {
+    fn aliasable(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        Self::build(token_table, cursor)
+    }
+}
+
+impl PrattOutput<BinaryOperator> for Expr {
+    fn apply(op: BinaryOperator, left: Self, right: Self) -> Self {
+        Expr::BinaryOp(Box::new(BinaryOp { op, left, right }))
+    }
+}
+
+impl PrattParserTrait for Expr {
+    type Item = BinaryOperator;
+    type Output = Self;
+
     fn parse_primary(
         token_table: &TokenTable,
         cursor: &mut usize,
-    ) -> Result<Self, ParserError> {
+    ) -> Result<Self::Output, ParserError> {
         match token_table.get_kind(*cursor) {
             Some(TokenKind::Number) => Self::class_number_literal(token_table, cursor),
             Some(TokenKind::StringLiteral) => Self::class_string_literal(token_table, cursor),
@@ -219,9 +262,7 @@ impl Expr {
                     }
                 }
             }
-            Some(TokenKind::Multiply) => {
-                Self::class_star(token_table, cursor)
-            },
+            Some(TokenKind::Multiply) => Self::class_star(token_table, cursor),
             Some(TokenKind::LeftParen) => {
                 // 处理括号表达式
                 *cursor += 1;
@@ -234,8 +275,23 @@ impl Expr {
         }
     }
 
-    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
-        Self::parse_expression(token_table, cursor)
+    fn match_item(token_kind: &TokenKind) -> Option<Self::Item> {
+        match token_kind {
+            TokenKind::Plus => Some(BinaryOperator::Add),
+            TokenKind::Subtract => Some(BinaryOperator::Subtract),
+            TokenKind::Multiply => Some(BinaryOperator::Multiply),
+            TokenKind::Divide => Some(BinaryOperator::Divide),
+            TokenKind::Mod => Some(BinaryOperator::Mod),
+            TokenKind::Equal => Some(BinaryOperator::Equal),
+            TokenKind::NotEqual => Some(BinaryOperator::NotEqual),
+            TokenKind::Less => Some(BinaryOperator::Less),
+            TokenKind::LessEqual => Some(BinaryOperator::LessEqual),
+            TokenKind::Greater => Some(BinaryOperator::Greater),
+            TokenKind::GreaterEqual => Some(BinaryOperator::GreaterEqual),
+            TokenKind::Keyword(Keyword::And) => Some(BinaryOperator::And),
+            TokenKind::Keyword(Keyword::Or) => Some(BinaryOperator::Or),
+            _ => None,
+        }
     }
 }
 
@@ -287,8 +343,8 @@ impl Alias {
 
 #[derive(Debug, PartialEq)]
 pub struct Field {
-    prefix: Option<usize>,
-    value: usize,
+    pub(crate) prefix: Option<usize>,
+    pub(crate) value: usize,
 }
 
 impl FromToken for Field {
@@ -309,7 +365,7 @@ impl FromToken for Field {
             .map(|kind| kind == &TokenKind::Identifier)
             .unwrap_or(false);
 
-        let (prefix, value, sum) = match (first, dot , second) {
+        let (prefix, value, sum) = match (first, dot, second) {
             (true, false, _) => (None, *cursor, 1),
             (true, true, true) => (Some(*cursor), *cursor + 2, 3),
             _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
@@ -369,10 +425,11 @@ impl FromToken for Star {
         } else if first && dot && second {
             let prefix = *cursor;
             *cursor += 3;
-            return Ok(Self { prefix: Some(prefix) });
+            return Ok(Self {
+                prefix: Some(prefix),
+            });
         } else {
             return Err(ParserError::SyntaxError(*cursor, *cursor));
-
         }
     }
 }
@@ -502,40 +559,20 @@ impl FromToken for NumbericLiteral {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum From {
-    Table(Alias),
-    LeftJoin {
-        left: Alias,
-        right: Alias,
-        condition: Expr,
-    },
-    RightJoin {
-        left: Alias,
-        right: Alias,
-        condition: Expr,
-    },
-    InnerJoin {
-        left: Alias,
-        right: Alias,
-        condition: Expr,
-    },
-    FullJoin {
-        left: Alias,
-        right: Alias,
-        condition: Expr,
-    }
-}
-
 #[cfg(test)]
 mod test {
     use minivec::mini_vec;
 
     use crate::{
-        Expr, ParserError,
-        common::{Alias, BinaryOp, BinaryOperator, Field, FunctionCall, StringLiteral},
+        common::{
+            alias::Alias,
+            expr::{
+                BinaryOp, BinaryOperator, Expr, Field, FunctionCall, NumbericLiteral, StringLiteral,
+            },
+        },
         keyword::Keyword,
         token::{TokenKind, TokenTable},
+        ParserError,
     };
 
     #[test]
@@ -611,9 +648,8 @@ mod test {
         assert_eq!(
             expr,
             Expr::FunctionCall(FunctionCall {
-                    name: 0,
-                    args: mini_vec![Expr::StringLiteral(StringLiteral { value: 2 })]
-                
+                name: 0,
+                args: mini_vec![Expr::StringLiteral(StringLiteral { value: 2 })]
             })
         );
         assert_eq!(cursor, 4);
@@ -634,16 +670,15 @@ mod test {
         assert_eq!(
             expr,
             Expr::FunctionCall(FunctionCall {
-                    name: 0,
-                    args: mini_vec![
-                        Expr::StringLiteral(StringLiteral { value: 2 }),
-                        Expr::StringLiteral(StringLiteral { value: 4 })
-                    ]
+                name: 0,
+                args: mini_vec![
+                    Expr::StringLiteral(StringLiteral { value: 2 }),
+                    Expr::StringLiteral(StringLiteral { value: 4 })
+                ]
             })
         );
         assert_eq!(cursor, 6);
     }
-
 
     #[test]
     fn test_function_should_panic_1() {
@@ -674,11 +709,11 @@ mod test {
             expr,
             Expr::BinaryOp(Box::new(BinaryOp {
                 op: BinaryOperator::Add,
-                left: Expr::NumbericLiteral(crate::common::NumbericLiteral { value: 0 }),
+                left: Expr::NumbericLiteral(NumbericLiteral { value: 0 }),
                 right: Expr::BinaryOp(Box::new(BinaryOp {
                     op: BinaryOperator::Multiply,
-                    left: Expr::NumbericLiteral(crate::common::NumbericLiteral { value: 2 }),
-                    right: Expr::NumbericLiteral(crate::common::NumbericLiteral { value: 4 }),
+                    left: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
+                    right: Expr::NumbericLiteral(NumbericLiteral { value: 4 }),
                 })),
             }))
         );
@@ -702,10 +737,10 @@ mod test {
                 op: BinaryOperator::Add,
                 left: Expr::BinaryOp(Box::new(BinaryOp {
                     op: BinaryOperator::Multiply,
-                    left: Expr::NumbericLiteral(crate::common::NumbericLiteral { value: 0 }),
-                    right: Expr::NumbericLiteral(crate::common::NumbericLiteral { value: 2 }),
+                    left: Expr::NumbericLiteral(NumbericLiteral { value: 0 }),
+                    right: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
                 })),
-                right: Expr::NumbericLiteral(crate::common::NumbericLiteral { value: 4 }),
+                right: Expr::NumbericLiteral(NumbericLiteral { value: 4 }),
             }))
         );
         assert_eq!(cursor, 5);
@@ -730,10 +765,10 @@ mod test {
                 op: BinaryOperator::Multiply,
                 left: Expr::BinaryOp(Box::new(BinaryOp {
                     op: BinaryOperator::Add,
-                    left: Expr::NumbericLiteral(crate::common::NumbericLiteral { value: 1 }),
-                    right: Expr::NumbericLiteral(crate::common::NumbericLiteral { value: 3 }),
+                    left: Expr::NumbericLiteral(NumbericLiteral { value: 1 }),
+                    right: Expr::NumbericLiteral(NumbericLiteral { value: 3 }),
                 })),
-                right: Expr::NumbericLiteral(crate::common::NumbericLiteral { value: 6 }),
+                right: Expr::NumbericLiteral(NumbericLiteral { value: 6 }),
             }))
         );
         assert_eq!(cursor, 7);

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use strum::Display;
 
-use minivec::{MiniVec, mini_vec};
+use minivec::{mini_vec, MiniVec};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display)]
 #[repr(u16)]
@@ -35,6 +35,9 @@ pub enum Keyword {
     Group,
     Having,
     Limit,
+    Left,
+    Right,
+    Inner,
     Offset,
     Distinct,
     Union,
@@ -46,6 +49,9 @@ pub enum Keyword {
     Then,
     Else,
     End,
+    Full,
+    Outer,
+    Cross,
 }
 
 impl Keyword {
@@ -80,6 +86,10 @@ impl Keyword {
             Keyword::Group => "GROUP",
             Keyword::Having => "HAVING",
             Keyword::Limit => "LIMIT",
+            Keyword::Left => "LEFT",
+            Keyword::Right => "RIGHT",
+            Keyword::Inner => "INNER",
+            Keyword::Cross => "CROSS",
             Keyword::Offset => "OFFSET",
             Keyword::Distinct => "DISTINCT",
             Keyword::Union => "UNION",
@@ -91,10 +101,12 @@ impl Keyword {
             Keyword::Then => "THEN",
             Keyword::Else => "ELSE",
             Keyword::End => "END",
+            Keyword::Full => "FULL",
+            Keyword::Outer => "OUTER",
         }
     }
 
-    pub const fn all_keywords() -> [Keyword; 40] {
+    pub const fn all_keywords() -> [Keyword; 42] {
         [
             Keyword::Select,
             Keyword::From,
@@ -136,6 +148,8 @@ impl Keyword {
             Keyword::Then,
             Keyword::Else,
             Keyword::End,
+            Keyword::Full,
+            Keyword::Outer,
         ]
     }
 }
@@ -169,6 +183,7 @@ impl std::str::FromStr for Keyword {
             "IS" => Ok(Keyword::Is),
             "IN" => Ok(Keyword::In),
             "LIKE" => Ok(Keyword::Like),
+            "LEFT" => Ok(Keyword::Left),
             "ORDER" => Ok(Keyword::Order),
             "BY" => Ok(Keyword::By),
             "GROUP" => Ok(Keyword::Group),
@@ -185,6 +200,8 @@ impl std::str::FromStr for Keyword {
             "THEN" => Ok(Keyword::Then),
             "ELSE" => Ok(Keyword::Else),
             "END" => Ok(Keyword::End),
+            "FULL" => Ok(Keyword::Full),
+            "OUTER" => Ok(Keyword::Outer),
             _ => Err(()),
         }
     }
@@ -230,7 +247,8 @@ impl KeywordMap {
                 Keyword::Order,
                 Keyword::Table,
                 Keyword::Union,
-                Keyword::Where
+                Keyword::Where,
+                Keyword::Full,
             ],
             mini_vec![
                 Keyword::Select,
@@ -239,7 +257,8 @@ impl KeywordMap {
                 Keyword::Values,
                 Keyword::Exists,
                 Keyword::Having,
-                Keyword::Limit
+                Keyword::Limit,
+                Keyword::Outer,
             ],
         ];
         Self { inner }

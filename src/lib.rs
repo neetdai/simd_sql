@@ -7,8 +7,9 @@ mod lexer;
 pub mod parser;
 mod token;
 pub mod ast;
-mod common;
+pub mod common;
+// mod common_tmp;
 
 pub use {error::ParserError, parser::Parser};
-pub use common::Expr;
+// pub use common_tmp::Expr;
 pub use ast::select::SelectStatement;

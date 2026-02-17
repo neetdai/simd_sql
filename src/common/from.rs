@@ -10,7 +10,7 @@ use crate::{
 #[derive(Debug, PartialEq)]
 pub enum Table {
     Name(MiniVec<Alias<Expr>>),
-    SubQuery(SelectStatement),
+    SubQuery(Box<SelectStatement>),
 }
 
 impl Table {
@@ -20,7 +20,7 @@ impl Table {
             let select_stmt = SelectStatement::new(token_table, cursor)?;
             expect_kind(token_table, cursor, &TokenKind::RightParen)?;
             *cursor += 1;
-            Ok(Table::SubQuery(select_stmt))
+            Ok(Table::SubQuery(Box::new(select_stmt)))
         } else {
             let mut list = MiniVec::new();
             loop {

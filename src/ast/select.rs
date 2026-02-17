@@ -1,12 +1,13 @@
 use std::{alloc::Allocator};
 
-use crate::{Expr, ParserError, common::{Alias, expect_kind, maybe_kind}, keyword::Keyword, token::{TokenKind, TokenTable}};
+use crate::{ParserError, common::{alias::Alias, expr::Expr, from::From, utils::{expect_kind, maybe_kind}}, keyword::Keyword, token::{TokenKind, TokenTable}};
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct SelectStatement {
-    columns: Vec<Alias>,
-    // table: Expr,
+    columns: Vec<Alias<Expr>>,
+    from: Option<From>,
+    where_statement: Option<Expr>,
 }
 
 impl SelectStatement {
@@ -37,13 +38,24 @@ impl SelectStatement {
             }
         }
 
-        if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::From)) {
+        let from = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::From)) {
             *cursor += 1;
-            
-        }
+            Some(From::parse(token_table, cursor)?)
+        } else {
+            None
+        };
+
+        let where_statement = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Where)) {
+            *cursor += 1;
+            Some(Expr::build(token_table, cursor)?)
+        } else {
+            None
+        };
 
         Ok(Self {
             columns,
+            from,
+            where_statement,
         })
     }
 }

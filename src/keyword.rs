@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use strum::Display;
 
-use minivec::{mini_vec, MiniVec};
+use minivec::{MiniVec, mini_vec};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display)]
 #[repr(u16)]

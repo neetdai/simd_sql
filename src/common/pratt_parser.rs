@@ -1,11 +1,16 @@
-use crate::{ParserError, token::{TokenKind, TokenTable}};
+use crate::{
+    ParserError,
+    token::{TokenKind, TokenTable},
+};
 
-pub(crate) trait PrattOutput<I> where I: PrecedenceTrait {
+pub(crate) trait PrattOutput<I>
+where
+    I: PrecedenceTrait,
+{
     fn apply(op: I, left: Self, right: Self) -> Self;
 }
 
 pub(crate) trait PrecedenceTrait {
-
     /// 获取运算符的优先级，数值越大优先级越高
     fn precedence(&self) -> usize;
 
@@ -19,7 +24,10 @@ pub(crate) trait PrattParserTrait {
     type Item: PrecedenceTrait;
     type Output: PrattOutput<Self::Item>;
 
-    fn parse_primary(token_table: &TokenTable, cursor: &mut usize) -> Result<Self::Output, ParserError>;
+    fn parse_primary(
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<Self::Output, ParserError>;
 
     fn match_item(token_kind: &TokenKind) -> Option<Self::Item>;
 }
@@ -29,15 +37,32 @@ pub(crate) struct PrattParser;
 
 impl PrattParser {
     /// 使用 Pratt Parser 解析表达式
-    pub(crate) fn parse_expression<P>(token_table: &TokenTable, cursor: &mut usize) -> Result<P::Output, ParserError> where P: PrattParserTrait {
-        Self::parse_expression_with_min_precedence::<P>(token_table, cursor, P::Item::min_precedence())
+    pub(crate) fn parse_expression<P>(
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<P::Output, ParserError>
+    where
+        P: PrattParserTrait,
+    {
+        Self::parse_expression_with_min_precedence::<P>(
+            token_table,
+            cursor,
+            P::Item::min_precedence(),
+        )
     }
 
     /// 使用 Pratt Parser 解析表达式，支持指定最小优先级
-    fn parse_expression_with_min_precedence<P>(token_table: &TokenTable, cursor: &mut usize, min_precedence: usize) -> Result<P::Output, ParserError> where P: PrattParserTrait {
+    fn parse_expression_with_min_precedence<P>(
+        token_table: &TokenTable,
+        cursor: &mut usize,
+        min_precedence: usize,
+    ) -> Result<P::Output, ParserError>
+    where
+        P: PrattParserTrait,
+    {
         // 解析左侧表达式（原子表达式）
         let mut left = P::parse_primary(token_table, cursor)?;
-    
+
         // 循环处理二元运算符
         loop {
             // 检查当前 token 是否是二元运算符
@@ -58,13 +83,15 @@ impl PrattParser {
                 op.precedence()
             };
 
-            let right = Self::parse_expression_with_min_precedence::<P>(token_table, cursor, next_min_precedence)?;
+            let right = Self::parse_expression_with_min_precedence::<P>(
+                token_table,
+                cursor,
+                next_min_precedence,
+            )?;
 
             left = P::Output::apply(op, left, right)
         }
 
         Ok(left)
     }
-
-
 }

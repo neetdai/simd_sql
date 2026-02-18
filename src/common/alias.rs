@@ -1,4 +1,8 @@
-use crate::{ParserError, keyword::Keyword, token::{TokenKind, TokenTable}};
+use crate::{
+    ParserError,
+    keyword::Keyword,
+    token::{TokenKind, TokenTable},
+};
 
 pub(crate) trait Aliasable: Sized {
     fn aliasable(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError>;
@@ -10,7 +14,10 @@ pub struct Alias<T> {
     pub value: T,
 }
 
-impl<T> Alias<T> where T: Aliasable {
+impl<T> Alias<T>
+where
+    T: Aliasable,
+{
     pub(crate) fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         let value = T::aliasable(token_table, cursor)?;
         match token_table.get_kind(*cursor) {

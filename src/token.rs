@@ -84,16 +84,21 @@ impl TokenTable {
         self.positions.push((start, end));
     }
 
-    pub(crate) fn get_kind<I>(&self, index: I) -> Option<&I::Output> where I: SliceIndex<[TokenKind]> {
+    pub(crate) fn get_kind<I>(&self, index: I) -> Option<&I::Output>
+    where
+        I: SliceIndex<[TokenKind]>,
+    {
         self.tokens.get(index)
     }
 
-    pub(crate) fn get_position<I>(&self, index: I) -> Option<&I::Output> where I: SliceIndex<[(usize, usize)]> {
+    pub(crate) fn get_position<I>(&self, index: I) -> Option<&I::Output>
+    where
+        I: SliceIndex<[(usize, usize)]>,
+    {
         self.positions.get(index)
     }
 
     pub(crate) fn get_entry(&self, index: usize) -> Option<(&TokenKind, &(usize, usize))> {
-        self.tokens.get(index)
-            .zip(self.positions.get(index))
+        self.tokens.get(index).zip(self.positions.get(index))
     }
 }

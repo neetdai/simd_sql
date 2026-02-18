@@ -1,5 +1,8 @@
 use crate::{
-    SelectStatement, error::ParserError, keyword::KeywordMap, lexer::{Lexer, SimdLexer}
+    SelectStatement,
+    error::ParserError,
+    keyword::KeywordMap,
+    lexer::{Lexer, SimdLexer},
 };
 use bumpalo::Bump;
 use simdutf8::basic::from_utf8;

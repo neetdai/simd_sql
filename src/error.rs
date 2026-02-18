@@ -18,5 +18,8 @@ pub enum ParserError {
     SyntaxError(usize, usize),
 
     #[error("unexpected token: expected `{expected}`, found `{found}`")]
-    UnexpectedToken { expected: TokenKind, found: TokenKind },
+    UnexpectedToken {
+        expected: TokenKind,
+        found: TokenKind,
+    },
 }

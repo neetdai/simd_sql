@@ -1,10 +1,10 @@
 use minivec::MiniVec;
 
 use crate::{
+    ParserError, SelectStatement,
     common::{alias::Alias, expr::Expr, utils::expect_kind},
     keyword::Keyword,
     token::{TokenKind, TokenTable},
-    ParserError, SelectStatement,
 };
 
 #[derive(Debug, PartialEq)]
@@ -22,9 +22,8 @@ impl Table {
             *cursor += 1;
             Ok(Table::SubQuery(Box::new(select_stmt)))
         } else {
-            
             let alias = Alias::new(token_table, cursor)?;
-            
+
             Ok(Table::Name(alias))
         }
     }
@@ -371,28 +370,29 @@ mod tests {
             (TokenKind::Identifier, 0, 3),
             (TokenKind::Keyword(Keyword::Cross), 4, 8),
             (TokenKind::Keyword(Keyword::Join), 10, 13),
-            (TokenKind::Identifier, 15, 20),  // "users"
+            (TokenKind::Identifier, 15, 20), // "users"
         ]);
         let mut cursor = 0;
         let result = From::parse(&tokens, &mut cursor).unwrap();
-        assert_eq!(result, From::CrossJoin { 
-            left: Table::Name(Alias {
+        assert_eq!(
+            result,
+            From::CrossJoin {
+                left: Table::Name(Alias {
                     name: None,
                     value: Expr::Field(Field {
                         prefix: None,
                         value: 0,
                     }),
-                }
-            ),
-            right: Table::Name(Alias {
+                }),
+                right: Table::Name(Alias {
                     name: None,
                     value: Expr::Field(Field {
                         prefix: None,
                         value: 3,
                     }),
-                }
-            ),
-         });
+                }),
+            }
+        );
     }
 
     #[test]

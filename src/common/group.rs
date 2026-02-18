@@ -1,6 +1,11 @@
 use minivec::MiniVec;
 
-use crate::{ParserError, common::{expr::Expr, utils::expect_kind}, keyword::Keyword, token::{TokenKind, TokenTable}};
+use crate::{
+    ParserError,
+    common::{expr::Expr, utils::expect_kind},
+    keyword::Keyword,
+    token::{TokenKind, TokenTable},
+};
 
 #[derive(Debug, PartialEq)]
 pub struct Group {
@@ -13,7 +18,7 @@ impl Group {
         *cursor += 1;
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::By))?;
         *cursor += 1;
-        
+
         let mut columns = MiniVec::new();
         loop {
             match token_table.get_kind(*cursor) {

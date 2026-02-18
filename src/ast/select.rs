@@ -1,9 +1,21 @@
-use std::{alloc::Allocator};
+use std::alloc::Allocator;
 
 use minivec::MiniVec;
 
-use crate::{ParserError, common::{alias::Alias, expr::Expr, from::From, group::Group, limit::Limit, order::Order, utils::{expect_kind, maybe_kind}}, keyword::Keyword, token::{TokenKind, TokenTable}};
-
+use crate::{
+    ParserError,
+    common::{
+        alias::Alias,
+        expr::Expr,
+        from::From,
+        group::Group,
+        limit::Limit,
+        order::Order,
+        utils::{expect_kind, maybe_kind},
+    },
+    keyword::Keyword,
+    token::{TokenKind, TokenTable},
+};
 
 #[derive(Debug, PartialEq)]
 pub struct SelectStatement {
@@ -17,7 +29,6 @@ pub struct SelectStatement {
 
 impl SelectStatement {
     pub fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
-
         // Ok(Self {
         //     columns: Vec::new(),
         // })
@@ -33,7 +44,7 @@ impl SelectStatement {
             match token_table.get_kind(*cursor) {
                 Some(TokenKind::Comma) => {
                     *cursor += 1;
-                },
+                }
                 Some(TokenKind::Keyword(_)) => break,
                 Some(_) => {
                     let expr = Alias::new(token_table, cursor)?;
@@ -51,7 +62,7 @@ impl SelectStatement {
                 match token_table.get_kind(*cursor) {
                     Some(TokenKind::Comma) => {
                         *cursor += 1;
-                    },
+                    }
                     Some(TokenKind::Keyword(_)) => break,
                     Some(_) => {
                         list.push(From::class_table(token_table, cursor)?);
@@ -64,12 +75,13 @@ impl SelectStatement {
             None
         };
 
-        let where_statement = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Where)) {
-            *cursor += 1;
-            Some(Expr::build(token_table, cursor)?)
-        } else {
-            None
-        };
+        let where_statement =
+            if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Where)) {
+                *cursor += 1;
+                Some(Expr::build(token_table, cursor)?)
+            } else {
+                None
+            };
 
         let group_by = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Group)) {
             Some(Group::build(token_table, cursor)?)

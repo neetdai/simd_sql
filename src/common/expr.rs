@@ -1,6 +1,7 @@
 use minivec::MiniVec;
 
 use crate::{
+    ParserError,
     common::{
         alias::Aliasable,
         pratt_parser::{PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
@@ -8,7 +9,6 @@ use crate::{
     },
     keyword::Keyword,
     token::{TokenKind, TokenTable},
-    ParserError,
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -562,6 +562,7 @@ mod test {
     use minivec::mini_vec;
 
     use crate::{
+        ParserError,
         common::{
             alias::Alias,
             expr::{
@@ -570,7 +571,6 @@ mod test {
         },
         keyword::Keyword,
         token::{TokenKind, TokenTable},
-        ParserError,
     };
 
     #[test]

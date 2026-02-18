@@ -6,13 +6,11 @@ pub(crate) fn expect_kind(
     cursor: &usize,
     token_kind: &TokenKind,
 ) -> Result<(), ParserError> {
-    if let Some(kind) = token_table.get_kind(*cursor) {
-        if kind != token_kind {
-            return Err(ParserError::UnexpectedToken {
-                expected: token_kind.clone(),
-                found: kind.clone(),
-            });
-        }
+    if let Some(kind) = token_table.get_kind(*cursor) && kind != token_kind {
+        return Err(ParserError::UnexpectedToken {
+            expected: token_kind.clone(),
+            found: kind.clone(),
+        });
     }
     Ok(())
 }

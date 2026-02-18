@@ -311,7 +311,7 @@ impl<'a> SimdLexer<'a> {
                 - (lower_mask.select(Simd::<u8, 16>::splat(32), Simd::<u8, 16>::splat(0)));
 
             for keyword in list.iter() {
-                let key_len = keyword.as_str().as_bytes().len();
+                let key_len = keyword.as_str().len();
                 let mut keyword_array = [0u8; 16];
                 keyword_array[0..key_len].copy_from_slice(keyword.as_str().as_bytes());
                 let keyword_chunk = Simd::from_array(keyword_array);

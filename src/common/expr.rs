@@ -254,12 +254,10 @@ impl PrattParserTrait for Expr {
                 // 检查是否是函数调用
                 if let Some(TokenKind::LeftParen) = token_table.get_kind(*cursor + 1) {
                     Self::class_function_call(token_table, cursor)
+                } else if let Ok(star) = Self::class_star(token_table, cursor) {
+                    Ok(star)
                 } else {
-                    if let Ok(star) = Self::class_star(token_table, cursor) {
-                        return Ok(star);
-                    } else {
-                        Self::class_field(token_table, cursor)
-                    }
+                    Self::class_field(token_table, cursor)
                 }
             }
             Some(TokenKind::Multiply) => Self::class_star(token_table, cursor),
@@ -421,15 +419,15 @@ impl FromToken for Star {
 
         if first_star {
             *cursor += 1;
-            return Ok(Self { prefix: None });
+            Ok(Self { prefix: None })
         } else if first && dot && second {
             let prefix = *cursor;
             *cursor += 3;
-            return Ok(Self {
+            Ok(Self {
                 prefix: Some(prefix),
-            });
+            })
         } else {
-            return Err(ParserError::SyntaxError(*cursor, *cursor));
+            Err(ParserError::SyntaxError(*cursor, *cursor))
         }
     }
 }

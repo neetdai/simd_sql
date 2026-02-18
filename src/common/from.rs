@@ -9,7 +9,7 @@ use crate::{
 
 #[derive(Debug, PartialEq)]
 pub enum Table {
-    Name(MiniVec<Alias<Expr>>),
+    Name(Alias<Expr>),
     SubQuery(Box<SelectStatement>),
 }
 
@@ -22,19 +22,10 @@ impl Table {
             *cursor += 1;
             Ok(Table::SubQuery(Box::new(select_stmt)))
         } else {
-            let mut list = MiniVec::new();
-            loop {
-                let alias = Alias::new(token_table, cursor)?;
-                list.push(alias);
-
-                if let Some(TokenKind::Comma) = token_table.get_kind(*cursor) {
-                    *cursor += 1;
-                } else {
-                    break;
-                }
-            } 
             
-            Ok(Table::Name(list))
+            let alias = Alias::new(token_table, cursor)?;
+            
+            Ok(Table::Name(alias))
         }
     }
 }
@@ -218,13 +209,13 @@ mod tests {
         assert_eq!(cursor, 1);
         assert_eq!(
             result,
-            From::Table(Table::Name(mini_vec![Alias {
+            From::Table(Table::Name(Alias {
                 name: None,
                 value: Expr::Field(Field {
                     prefix: None,
                     value: 0,
                 }),
-            }]))
+            }))
         );
     }
 
@@ -239,13 +230,13 @@ mod tests {
         assert_eq!(cursor, 2);
         assert_eq!(
             result,
-            From::Table(Table::Name(mini_vec![Alias {
+            From::Table(Table::Name(Alias {
                 name: Some(1),
                 value: Expr::Field(Field {
                     prefix: None,
                     value: 0,
                 }),
-            }]))
+            }))
         );
     }
 
@@ -284,23 +275,23 @@ mod tests {
         {
             assert_eq!(
                 left,
-                Table::Name(mini_vec![Alias {
+                Table::Name(Alias {
                     name: None,
                     value: Expr::Field(Field {
                         prefix: None,
                         value: 0
                     })
-                }])
+                })
             );
             assert_eq!(
                 right,
-                Table::Name(mini_vec![Alias {
+                Table::Name(Alias {
                     name: None,
                     value: Expr::Field(Field {
                         prefix: None,
                         value: 2
                     })
-                }])
+                })
             );
             assert_eq!(condition, expected_condition);
         }
@@ -375,70 +366,32 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_tables() {
-        let tokens = tokenize(vec![
-            (TokenKind::Identifier, 0, 3),  // "users"
-            (TokenKind::Comma, 4, 4),       // ","
-            (TokenKind::Identifier, 6, 10), // "orders"
-        ]);
-        let mut cursor = 0;
-        let result = From::parse(&tokens, &mut cursor).unwrap();
-        assert_eq!(result, 
-            From::Table(Table::Name(mini_vec![Alias {
-                name: None,
-                value: Expr::Field(Field {
-                    prefix: None,
-                    value: 0,
-                }),
-            },
-            Alias {
-                name: None,
-                value: Expr::Field(Field {
-                    prefix: None,
-                    value: 2,
-                }),
-            }])),
-        );
-    }
-
-    #[test]
     fn test_cross_join() {
         let tokens = tokenize(vec![
             (TokenKind::Identifier, 0, 3),
             (TokenKind::Keyword(Keyword::Cross), 4, 8),
             (TokenKind::Keyword(Keyword::Join), 10, 13),
             (TokenKind::Identifier, 15, 20),  // "users"
-            (TokenKind::Comma, 21, 21),       // ","
-            (TokenKind::Identifier, 23, 28), // "orders"
         ]);
         let mut cursor = 0;
         let result = From::parse(&tokens, &mut cursor).unwrap();
         assert_eq!(result, From::CrossJoin { 
-            left: Table::Name(mini_vec![
-                Alias {
+            left: Table::Name(Alias {
                     name: None,
                     value: Expr::Field(Field {
                         prefix: None,
                         value: 0,
                     }),
                 }
-            ]),
-            right: Table::Name(mini_vec![
-                Alias {
+            ),
+            right: Table::Name(Alias {
                     name: None,
                     value: Expr::Field(Field {
                         prefix: None,
                         value: 3,
                     }),
-                },
-                Alias {
-                    name: None,
-                    value: Expr::Field(Field {
-                        prefix: None,
-                        value: 5,
-                    }),
                 }
-            ]),
+            ),
          });
     }
 
@@ -495,13 +448,13 @@ mod tests {
 
         assert_eq!(
             result,
-            From::Table(Table::Name(mini_vec![Alias {
+            From::Table(Table::Name(Alias {
                 name: None,
                 value: Expr::Field(Field {
                     prefix: Some(0),
                     value: 2
                 })
-            }]))
+            }))
         );
     }
 }

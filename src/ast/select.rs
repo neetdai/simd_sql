@@ -1,13 +1,18 @@
 use std::{alloc::Allocator};
 
-use crate::{ParserError, common::{alias::Alias, expr::Expr, from::From, utils::{expect_kind, maybe_kind}}, keyword::Keyword, token::{TokenKind, TokenTable}};
+use minivec::MiniVec;
+
+use crate::{ParserError, common::{alias::Alias, expr::Expr, from::From, group::Group, limit::Limit, order::Order, utils::{expect_kind, maybe_kind}}, keyword::Keyword, token::{TokenKind, TokenTable}};
 
 
 #[derive(Debug, PartialEq)]
 pub struct SelectStatement {
     columns: Vec<Alias<Expr>>,
-    from: Option<From>,
+    from: Option<MiniVec<From>>,
     where_statement: Option<Expr>,
+    group_by: Option<Group>,
+    order_by: Option<Order>,
+    limit: Option<Limit>,
 }
 
 impl SelectStatement {
@@ -40,7 +45,21 @@ impl SelectStatement {
 
         let from = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::From)) {
             *cursor += 1;
-            Some(From::parse(token_table, cursor)?)
+
+            let mut list = MiniVec::new();
+            loop {
+                match token_table.get_kind(*cursor) {
+                    Some(TokenKind::Comma) => {
+                        *cursor += 1;
+                    },
+                    Some(TokenKind::Keyword(_)) => break,
+                    Some(_) => {
+                        list.push(From::class_table(token_table, cursor)?);
+                    }
+                    None => break,
+                }
+            }
+            Some(list)
         } else {
             None
         };
@@ -52,10 +71,32 @@ impl SelectStatement {
             None
         };
 
+        let group_by = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Group)) {
+            Some(Group::build(token_table, cursor)?)
+        } else {
+            None
+        };
+
+        let order_by = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Order)) {
+            Some(Order::build(token_table, cursor)?)
+        } else {
+            None
+        };
+
+        let limit = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Limit)) {
+            *cursor += 1;
+            Some(Limit::new(token_table, cursor)?)
+        } else {
+            None
+        };
+
         Ok(Self {
             columns,
             from,
             where_statement,
+            group_by,
+            order_by,
+            limit,
         })
     }
 }

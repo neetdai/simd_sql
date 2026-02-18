@@ -22,10 +22,10 @@ impl Parser {
         let text = from_utf8(text.as_bytes())?;
         let tokentable = {
             if is_x86_feature_detected!("avx2") {
-                let mut lexer = SimdLexer::new(&text, &self.keyword_map)?;
+                let mut lexer = SimdLexer::new(text, &self.keyword_map)?;
                 lexer.tokenize()?
             } else {
-                let mut lexer = Lexer::new(&text, &self.keyword_map)?;
+                let mut lexer = Lexer::new(text, &self.keyword_map)?;
                 lexer.tokenize()?
             }
         };

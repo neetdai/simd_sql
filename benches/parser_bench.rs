@@ -7,7 +7,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     let parser = Parser::new().unwrap();
 
-    let sql_1 = "SELECT * FROM table WHERE id = 1";
+    let sql_1 = "SELECT * FROM a WHERE id = 1";
     let sql_len_1 = sql_1.len();
     group.throughput(Throughput::Elements(sql_1.len() as u64));
     group.bench_with_input(

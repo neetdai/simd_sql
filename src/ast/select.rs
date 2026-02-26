@@ -19,12 +19,12 @@ use crate::{
 
 #[derive(Debug, PartialEq)]
 pub struct SelectStatement {
-    columns: Vec<Alias<Expr>>,
-    from: Option<MiniVec<From>>,
-    where_statement: Option<Expr>,
-    group_by: Option<Group>,
-    order_by: Option<Order>,
-    limit: Option<Limit>,
+    pub columns: Vec<Alias<Expr>>,
+    pub from: Option<MiniVec<From>>,
+    pub where_statement: Option<Expr>,
+    pub group_by: Option<Group>,
+    pub order_by: Option<Order>,
+    pub limit: Option<Limit>,
 }
 
 impl SelectStatement {

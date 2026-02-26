@@ -34,6 +34,8 @@ impl Parser {
         };
         let mut cursor = 0;
         let select = SelectStatement::new(&tokentable, &mut cursor)?;
+        // dbg!(&select);
+        // dbg!(&select.where_statement);
         Ok(())
     }
 }

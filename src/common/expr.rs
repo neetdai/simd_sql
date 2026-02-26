@@ -1,14 +1,11 @@
 use minivec::MiniVec;
 
 use crate::{
-    common::{
+    ParserError, common::{
         alias::Aliasable,
-        pratt_parser::{PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
+        pratt_parser::{Flow, PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
         utils::{expect_kind, maybe_kind},
-    },
-    keyword::Keyword,
-    token::{TokenKind, TokenTable},
-    ParserError,
+    }, keyword::Keyword, token::{TokenKind, TokenTable}
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -26,6 +23,8 @@ pub enum BinaryOperator {
     GreaterEqual,
     And,
     Or,
+    Between,
+    In,
 }
 
 impl BinaryOperator {
@@ -45,6 +44,8 @@ impl BinaryOperator {
             TokenKind::GreaterEqual => Some(BinaryOperator::GreaterEqual),
             TokenKind::Keyword(Keyword::And) => Some(BinaryOperator::And),
             TokenKind::Keyword(Keyword::Or) => Some(BinaryOperator::Or),
+            TokenKind::Keyword(Keyword::Between) => Some(BinaryOperator::Between),
+            TokenKind::Keyword(Keyword::In) => Some(BinaryOperator::In),
             _ => None,
         }
     }
@@ -56,13 +57,14 @@ impl PrecedenceTrait for BinaryOperator {
         match self {
             BinaryOperator::Or => 1,
             BinaryOperator::And => 2,
-            BinaryOperator::Equal | BinaryOperator::NotEqual => 3,
+            BinaryOperator::Equal | BinaryOperator::NotEqual  => 3,
+            BinaryOperator::Between | BinaryOperator::In => 4,
             BinaryOperator::Less
             | BinaryOperator::LessEqual
             | BinaryOperator::Greater
-            | BinaryOperator::GreaterEqual => 4,
-            BinaryOperator::Add | BinaryOperator::Subtract => 5,
-            BinaryOperator::Multiply | BinaryOperator::Divide | BinaryOperator::Mod => 6,
+            | BinaryOperator::GreaterEqual => 5,
+            BinaryOperator::Add | BinaryOperator::Subtract => 6,
+            BinaryOperator::Multiply | BinaryOperator::Divide | BinaryOperator::Mod => 7,
         }
     }
 
@@ -76,14 +78,14 @@ impl PrecedenceTrait for BinaryOperator {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BinaryOp {
     pub op: BinaryOperator,
     pub left: Expr,
     pub right: Expr,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Field(Field),
     Star(Star),
@@ -190,15 +192,7 @@ impl PrattParserTrait for Expr {
                 } else if let Ok(star) = Self::class_star(token_table, cursor) {
                     Ok(star)
                 } else {
-                    let field = Self::class_field(token_table, cursor)?;
-
-                    if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Between)) {
-                        Self::class_between(Box::new(field), token_table, cursor)
-                    } else if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::In)) {
-                        Self::class_in(Box::new(field), token_table, cursor)
-                    } else {
-                        Ok(field)
-                    }
+                    Self::class_field(token_table, cursor)
                 }
             }
             Some(TokenKind::Multiply) => Self::class_star(token_table, cursor),
@@ -230,6 +224,24 @@ impl PrattParserTrait for Expr {
             TokenKind::Keyword(Keyword::And) => Some(BinaryOperator::And),
             TokenKind::Keyword(Keyword::Or) => Some(BinaryOperator::Or),
             _ => None,
+        }
+    }
+
+    fn parse_postfix(
+        left: Self::Output,
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<(Self::Output, Flow), ParserError> {
+        match token_table.get_kind(*cursor) {
+            Some(&TokenKind::Keyword(Keyword::Between)) => {
+                let between = Between::build(Box::new(left), token_table, cursor);
+                between.map(|e| (Expr::Between(e), Flow::Continue))
+            },
+            Some(&TokenKind::Keyword(Keyword::In)) => {
+                let in_ = In::build(Box::new(left), token_table, cursor);
+                in_.map(|e| (Expr::In(e), Flow::Continue))
+            },
+            _ => Ok((left, Flow::Run)),
         }
     }
 }
@@ -280,7 +292,7 @@ impl Alias {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Field {
     pub(crate) prefix: Option<usize>,
     pub(crate) value: usize,
@@ -331,7 +343,7 @@ impl FromToken for Field {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Star {
     pub prefix: Option<usize>,
 }
@@ -373,7 +385,7 @@ impl FromToken for Star {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FunctionCall {
     name: usize,
     args: MiniVec<Expr>,
@@ -458,7 +470,7 @@ impl FromToken for FunctionCall {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct StringLiteral {
     value: usize,
 }
@@ -478,7 +490,7 @@ impl FromToken for StringLiteral {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct NumbericLiteral {
     value: usize,
 }
@@ -498,7 +510,7 @@ impl FromToken for NumbericLiteral {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Between {
     field: Box<Expr>,
     lower: Box<Expr>,
@@ -514,12 +526,28 @@ impl Between {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Between))?;
         *cursor += 1;
 
-        let lower = Box::new(Expr::build(token_table, cursor)?);
+        let lower = match token_table.get_kind(*cursor) {
+            Some(TokenKind::Identifier) => {
+                Box::new(Expr::class_field(token_table, cursor)?)
+            },
+            Some(TokenKind::Number) => {
+                Box::new(Expr::class_number_literal(token_table, cursor)?)
+            },
+            _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
+        };
 
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::And))?;
         *cursor += 1;
 
-        let upper = Box::new(Expr::build(token_table, cursor)?);
+        let upper = match token_table.get_kind(*cursor) {
+            Some(TokenKind::Identifier) => {
+                Box::new(Expr::class_field(token_table, cursor)?)
+            },
+            Some(TokenKind::Number) => {
+                Box::new(Expr::class_number_literal(token_table, cursor)?)
+            },
+            _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
+        };
 
         Ok(Self {
             field,
@@ -529,7 +557,7 @@ impl Between {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct In {
     field: Box<Expr>,
     values: MiniVec<Expr>,
@@ -550,11 +578,15 @@ impl In {
 
         let mut values = MiniVec::with_capacity(8);
         loop {
-            token_table.get_kind(*cursor);
-            let expr = Expr::build(token_table, cursor)?;
-            values.push(expr);
-
             match token_table.get_kind(*cursor) {
+                Some(TokenKind::Identifier) => {
+                    let expr = Expr::class_string_literal(token_table, cursor)?;
+                    values.push(expr);
+                }
+                Some(TokenKind::Number) => {
+                    let expr = Expr::class_number_literal(token_table, cursor)?;
+                    values.push(expr);
+                }
                 Some(TokenKind::Comma) => {
                     *cursor += 1;
                     continue;
@@ -566,10 +598,7 @@ impl In {
                 Some(TokenKind::Keyword(_)) => {
                     break;
                 }
-                Some(_) => {
-                    continue;
-                }
-                None => {
+                _ => {
                     return Err(ParserError::SyntaxError(*cursor, *cursor));
                 }
             }

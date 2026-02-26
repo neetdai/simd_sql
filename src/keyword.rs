@@ -110,7 +110,7 @@ impl Keyword {
         }
     }
 
-    pub const fn all_keywords() -> [Keyword; 42] {
+    pub const fn all_keywords() -> [Keyword; 48] {
         [
             Keyword::Select,
             Keyword::From,
@@ -154,6 +154,12 @@ impl Keyword {
             Keyword::End,
             Keyword::Full,
             Keyword::Outer,
+            Keyword::Order,
+            Keyword::Between,
+            Keyword::Left,
+            Keyword::Right,
+            Keyword::Cross,
+            Keyword::Inner,
         ]
     }
 }
@@ -206,6 +212,8 @@ impl std::str::FromStr for Keyword {
             "END" => Ok(Keyword::End),
             "FULL" => Ok(Keyword::Full),
             "OUTER" => Ok(Keyword::Outer),
+            "CROSS" => Ok(Keyword::Cross),
+            "INNER" => Ok(Keyword::Inner),
             _ => Err(()),
         }
     }
@@ -213,7 +221,7 @@ impl std::str::FromStr for Keyword {
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct KeywordMap {
-    inner: [MiniVec<Keyword>; 7],
+    inner: [MiniVec<Keyword>; 8],
 }
 
 impl KeywordMap {
@@ -234,7 +242,8 @@ impl KeywordMap {
                 Keyword::Not,
                 Keyword::End,
                 Keyword::All,
-                Keyword::Set
+                Keyword::Set,
+                Keyword::And,
             ],
             mini_vec![
                 Keyword::Join,
@@ -243,6 +252,7 @@ impl KeywordMap {
                 Keyword::Drop,
                 Keyword::From,
                 Keyword::Into,
+                Keyword::Full,
             ],
             mini_vec![
                 Keyword::Alter,
@@ -252,7 +262,8 @@ impl KeywordMap {
                 Keyword::Table,
                 Keyword::Union,
                 Keyword::Where,
-                Keyword::Full,
+                Keyword::Outer,
+                Keyword::Limit,
             ],
             mini_vec![
                 Keyword::Select,
@@ -261,8 +272,9 @@ impl KeywordMap {
                 Keyword::Values,
                 Keyword::Exists,
                 Keyword::Having,
-                Keyword::Limit,
-                Keyword::Outer,
+            ],
+            mini_vec![
+                Keyword::Between,
             ],
         ];
         Self { inner }

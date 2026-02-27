@@ -533,6 +533,9 @@ impl Between {
             Some(TokenKind::Number) => {
                 Box::new(Expr::class_number_literal(token_table, cursor)?)
             },
+            Some(TokenKind::StringLiteral) => {
+                Box::new(Expr::class_string_literal(token_table, cursor)?)
+            }
             _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
         };
 
@@ -545,6 +548,9 @@ impl Between {
             },
             Some(TokenKind::Number) => {
                 Box::new(Expr::class_number_literal(token_table, cursor)?)
+            },
+            Some(TokenKind::StringLiteral) => {
+                Box::new(Expr::class_string_literal(token_table, cursor)?)
             },
             _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
         };
@@ -580,11 +586,15 @@ impl In {
         loop {
             match token_table.get_kind(*cursor) {
                 Some(TokenKind::Identifier) => {
-                    let expr = Expr::class_string_literal(token_table, cursor)?;
+                    let expr = Expr::class_field(token_table, cursor)?;
                     values.push(expr);
                 }
                 Some(TokenKind::Number) => {
                     let expr = Expr::class_number_literal(token_table, cursor)?;
+                    values.push(expr);
+                }
+                Some(TokenKind::StringLiteral) => {
+                    let expr = Expr::class_string_literal(token_table, cursor)?;
                     values.push(expr);
                 }
                 Some(TokenKind::Comma) => {

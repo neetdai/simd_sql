@@ -272,6 +272,7 @@ impl KeywordMap {
                 Keyword::Values,
                 Keyword::Exists,
                 Keyword::Having,
+                Keyword::Offset,
             ],
             mini_vec![
                 Keyword::Between,

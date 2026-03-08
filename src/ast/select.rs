@@ -23,6 +23,7 @@ pub struct SelectStatement {
     pub from: Option<MiniVec<From>>,
     pub where_statement: Option<Expr>,
     pub group_by: Option<Group>,
+    pub having_statement: Option<Expr>,
     pub order_by: Option<Order>,
     pub limit: Option<Limit>,
 }
@@ -89,6 +90,13 @@ impl SelectStatement {
             None
         };
 
+        let having_statement = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Having)) {
+            *cursor += 1;
+            Some(Expr::build(token_table, cursor)?)
+        } else {
+            None
+        };
+
         let order_by = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Order)) {
             Some(Order::build(token_table, cursor)?)
         } else {
@@ -96,7 +104,6 @@ impl SelectStatement {
         };
 
         let limit = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Limit)) {
-            *cursor += 1;
             Some(Limit::new(token_table, cursor)?)
         } else {
             None
@@ -107,6 +114,7 @@ impl SelectStatement {
             from,
             where_statement,
             group_by,
+            having_statement,
             order_by,
             limit,
         })

@@ -244,6 +244,7 @@ impl KeywordMap {
                 Keyword::All,
                 Keyword::Set,
                 Keyword::And,
+                Keyword::Asc,
             ],
             mini_vec![
                 Keyword::Join,
@@ -253,6 +254,7 @@ impl KeywordMap {
                 Keyword::From,
                 Keyword::Into,
                 Keyword::Full,
+                Keyword::Desc,
             ],
             mini_vec![
                 Keyword::Alter,

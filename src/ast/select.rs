@@ -5,7 +5,7 @@ use minivec::MiniVec;
 use crate::{
     ParserError,
     common::{
-        alias::Alias,
+        alias::{Alias, Aliasable},
         expr::Expr,
         from::From,
         group::Group,
@@ -66,7 +66,7 @@ impl SelectStatement {
                     }
                     Some(TokenKind::Keyword(_)) => break,
                     Some(_) => {
-                        list.push(From::class_table(token_table, cursor)?);
+                        list.push(From::parse(token_table, cursor)?);
                     }
                     None => break,
                 }
@@ -118,5 +118,18 @@ impl SelectStatement {
             order_by,
             limit,
         })
+    }
+}
+
+pub type SubSelectStatement = Box<SelectStatement>;
+
+impl Aliasable for SubSelectStatement {
+    fn aliasable(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
+        *cursor += 1;
+        let select_stmt = SelectStatement::new(token_table, cursor)?;
+        expect_kind(token_table, cursor, &TokenKind::RightParen)?;
+        *cursor += 1;
+        Ok(Box::new(select_stmt))
     }
 }

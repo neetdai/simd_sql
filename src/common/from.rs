@@ -1,26 +1,20 @@
 use minivec::MiniVec;
 
 use crate::{
-    ParserError, SelectStatement,
-    common::{alias::Alias, expr::Expr, utils::expect_kind},
-    keyword::Keyword,
-    token::{TokenKind, TokenTable},
+    ParserError, SelectStatement, ast::select::SubSelectStatement, common::{alias::Alias, expr::Expr, utils::expect_kind}, keyword::Keyword, token::{TokenKind, TokenTable}
 };
 
 #[derive(Debug, PartialEq)]
 pub enum Table {
     Name(Alias<Expr>),
-    SubQuery(Box<SelectStatement>),
+    SubQuery(Alias<SubSelectStatement>),
 }
 
 impl Table {
     pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         if let Some(TokenKind::LeftParen) = token_table.get_kind(*cursor) {
-            *cursor += 1;
-            let select_stmt = SelectStatement::new(token_table, cursor)?;
-            expect_kind(token_table, cursor, &TokenKind::RightParen)?;
-            *cursor += 1;
-            Ok(Table::SubQuery(Box::new(select_stmt)))
+            let alias = Alias::new(token_table, cursor)?;
+            Ok(Table::SubQuery(alias))
         } else {
             let alias = Alias::new(token_table, cursor)?;
 
@@ -77,6 +71,7 @@ impl From {
         cursor: &mut usize,
         mut current: From,
     ) -> Result<Self, ParserError> {
+        dbg!(token_table.get_kind(*cursor));
         loop {
             match token_table.get_kind(*cursor) {
                 Some(TokenKind::Keyword(Keyword::Join)) => {

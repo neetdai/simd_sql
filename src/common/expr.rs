@@ -614,6 +614,10 @@ impl In {
             }
         }
 
+        if values.is_empty() {
+            return Err(ParserError::SyntaxError(*cursor, *cursor));
+        }
+
         Ok(Self { field, values })
     }
 }

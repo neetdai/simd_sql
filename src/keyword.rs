@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use strum::Display;
 
-use minivec::{MiniVec, mini_vec};
+use minivec::{mini_vec, MiniVec};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display)]
 #[repr(u16)]
@@ -244,6 +244,7 @@ impl KeywordMap {
                 Keyword::All,
                 Keyword::Set,
                 Keyword::And,
+                Keyword::End,
             ],
             mini_vec![
                 Keyword::Join,
@@ -253,6 +254,10 @@ impl KeywordMap {
                 Keyword::From,
                 Keyword::Into,
                 Keyword::Full,
+                Keyword::Case,
+                Keyword::Then,
+                Keyword::Else,
+                Keyword::When,
             ],
             mini_vec![
                 Keyword::Alter,
@@ -274,9 +279,7 @@ impl KeywordMap {
                 Keyword::Having,
                 Keyword::Offset,
             ],
-            mini_vec![
-                Keyword::Between,
-            ],
+            mini_vec![Keyword::Between, Keyword::Case, Keyword::Distinct,],
         ];
         Self { inner }
     }

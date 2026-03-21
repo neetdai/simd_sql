@@ -3,7 +3,6 @@ use std::alloc::Allocator;
 use minivec::MiniVec;
 
 use crate::{
-    ParserError,
     common::{
         alias::{Alias, Aliasable},
         expr::Expr,
@@ -15,6 +14,7 @@ use crate::{
     },
     keyword::Keyword,
     token::{TokenKind, TokenTable},
+    ParserError,
 };
 
 #[derive(Debug, PartialEq)]
@@ -46,6 +46,10 @@ impl SelectStatement {
                 Some(TokenKind::Comma) => {
                     *cursor += 1;
                 }
+                Some(TokenKind::Keyword(Keyword::Case)) => {
+                    let expr = Alias::new(token_table, cursor)?;
+                    columns.push(expr);
+                }
                 Some(TokenKind::Keyword(_)) => break,
                 Some(_) => {
                     let expr = Alias::new(token_table, cursor)?;
@@ -64,7 +68,7 @@ impl SelectStatement {
                     Some(TokenKind::Comma) => {
                         *cursor += 1;
                     }
-                    Some(TokenKind::Keyword(_)) => break,
+                    Some(TokenKind::Keyword(_))| Some(TokenKind::Eof) => break,
                     Some(_) => {
                         list.push(From::parse(token_table, cursor)?);
                     }
@@ -90,12 +94,13 @@ impl SelectStatement {
             None
         };
 
-        let having_statement = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Having)) {
-            *cursor += 1;
-            Some(Expr::build(token_table, cursor)?)
-        } else {
-            None
-        };
+        let having_statement =
+            if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Having)) {
+                *cursor += 1;
+                Some(Expr::build(token_table, cursor)?)
+            } else {
+                None
+            };
 
         let order_by = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Order)) {
             Some(Order::build(token_table, cursor)?)

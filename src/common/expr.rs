@@ -1,11 +1,14 @@
 use minivec::MiniVec;
 
 use crate::{
-    ParserError, common::{
+    common::{
         alias::Aliasable,
         pratt_parser::{Flow, PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
         utils::{expect_kind, maybe_kind},
-    }, keyword::Keyword, token::{TokenKind, TokenTable}
+    },
+    keyword::Keyword,
+    token::{TokenKind, TokenTable},
+    ParserError,
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -57,7 +60,7 @@ impl PrecedenceTrait for BinaryOperator {
         match self {
             BinaryOperator::Or => 1,
             BinaryOperator::And => 2,
-            BinaryOperator::Equal | BinaryOperator::NotEqual  => 3,
+            BinaryOperator::Equal | BinaryOperator::NotEqual => 3,
             BinaryOperator::Between | BinaryOperator::In => 4,
             BinaryOperator::Less
             | BinaryOperator::LessEqual
@@ -95,6 +98,7 @@ pub enum Expr {
     BinaryOp(Box<BinaryOp>),
     Between(Between),
     In(In),
+    Case(CaseExpr),
 }
 
 impl Expr {
@@ -149,6 +153,13 @@ impl Expr {
         In::build(field, token_table, cursor).map(Expr::In)
     }
 
+    pub(crate) fn class_case(
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
+        CaseExpr::build(token_table, cursor).map(Expr::Case)
+    }
+
     /// 使用 Pratt Parser 解析表达式
     pub(crate) fn parse_expression(
         token_table: &TokenTable,
@@ -197,13 +208,13 @@ impl PrattParserTrait for Expr {
             }
             Some(TokenKind::Multiply) => Self::class_star(token_table, cursor),
             Some(TokenKind::LeftParen) => {
-                // 处理括号表达式
                 *cursor += 1;
                 let expr = Self::parse_expression(token_table, cursor)?;
                 expect_kind(token_table, cursor, &TokenKind::RightParen)?;
                 *cursor += 1;
                 Ok(expr)
             }
+            Some(TokenKind::Keyword(Keyword::Case)) => Self::class_case(token_table, cursor),
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
         }
     }
@@ -236,11 +247,11 @@ impl PrattParserTrait for Expr {
             Some(&TokenKind::Keyword(Keyword::Between)) => {
                 let between = Between::build(Box::new(left), token_table, cursor);
                 between.map(|e| (Expr::Between(e), Flow::Continue))
-            },
+            }
             Some(&TokenKind::Keyword(Keyword::In)) => {
                 let in_ = In::build(Box::new(left), token_table, cursor);
                 in_.map(|e| (Expr::In(e), Flow::Continue))
-            },
+            }
             _ => Ok((left, Flow::Run)),
         }
     }
@@ -527,12 +538,8 @@ impl Between {
         *cursor += 1;
 
         let lower = match token_table.get_kind(*cursor) {
-            Some(TokenKind::Identifier) => {
-                Box::new(Expr::class_field(token_table, cursor)?)
-            },
-            Some(TokenKind::Number) => {
-                Box::new(Expr::class_number_literal(token_table, cursor)?)
-            },
+            Some(TokenKind::Identifier) => Box::new(Expr::class_field(token_table, cursor)?),
+            Some(TokenKind::Number) => Box::new(Expr::class_number_literal(token_table, cursor)?),
             Some(TokenKind::StringLiteral) => {
                 Box::new(Expr::class_string_literal(token_table, cursor)?)
             }
@@ -543,15 +550,11 @@ impl Between {
         *cursor += 1;
 
         let upper = match token_table.get_kind(*cursor) {
-            Some(TokenKind::Identifier) => {
-                Box::new(Expr::class_field(token_table, cursor)?)
-            },
-            Some(TokenKind::Number) => {
-                Box::new(Expr::class_number_literal(token_table, cursor)?)
-            },
+            Some(TokenKind::Identifier) => Box::new(Expr::class_field(token_table, cursor)?),
+            Some(TokenKind::Number) => Box::new(Expr::class_number_literal(token_table, cursor)?),
             Some(TokenKind::StringLiteral) => {
                 Box::new(Expr::class_string_literal(token_table, cursor)?)
-            },
+            }
             _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
         };
 
@@ -575,7 +578,6 @@ impl In {
         token_table: &TokenTable,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
-
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::In))?;
         *cursor += 1;
 
@@ -619,6 +621,68 @@ impl In {
         }
 
         Ok(Self { field, values })
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CaseExpr {
+    pub condition: Option<Box<Expr>>,
+    pub when_clauses: MiniVec<WhenClause>,
+    pub else_result: Option<Box<Expr>>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct WhenClause {
+    pub condition: Box<Expr>,
+    pub result: Box<Expr>,
+}
+
+impl CaseExpr {
+    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Case))?;
+        *cursor += 1;
+
+        let condition = if !maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::When)) {
+            Some(Box::new(Expr::build(token_table, cursor)?))
+        } else {
+            None
+        };
+
+        let mut when_clauses = MiniVec::new();
+        loop {
+            if !maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::When)) {
+                break;
+            }
+            *cursor += 1;
+
+            let cond = Expr::build(token_table, cursor)?;
+
+            expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Then))?;
+            *cursor += 1;
+
+            let result = Expr::build(token_table, cursor)?;
+
+            when_clauses.push(WhenClause {
+                condition: Box::new(cond),
+                result: Box::new(result),
+            });
+        }
+
+        let else_result = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Else)) {
+            *cursor += 1;
+            Some(Box::new(Expr::build(token_table, cursor)?))
+        } else {
+            None
+        };
+
+        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::End))?;
+        *cursor += 1;
+
+        Ok(Self {
+            condition,
+            when_clauses,
+            else_result,
+        })
     }
 }
 

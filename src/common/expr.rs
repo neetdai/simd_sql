@@ -28,6 +28,7 @@ pub enum BinaryOperator {
     Or,
     Between,
     In,
+    Like,
 }
 
 impl BinaryOperator {
@@ -49,6 +50,7 @@ impl BinaryOperator {
             TokenKind::Keyword(Keyword::Or) => Some(BinaryOperator::Or),
             TokenKind::Keyword(Keyword::Between) => Some(BinaryOperator::Between),
             TokenKind::Keyword(Keyword::In) => Some(BinaryOperator::In),
+            TokenKind::Keyword(Keyword::Like) => Some(BinaryOperator::Like),
             _ => None,
         }
     }
@@ -61,7 +63,7 @@ impl PrecedenceTrait for BinaryOperator {
             BinaryOperator::Or => 1,
             BinaryOperator::And => 2,
             BinaryOperator::Equal | BinaryOperator::NotEqual => 3,
-            BinaryOperator::Between | BinaryOperator::In => 4,
+            BinaryOperator::Between | BinaryOperator::In | BinaryOperator::Like => 4,
             BinaryOperator::Less
             | BinaryOperator::LessEqual
             | BinaryOperator::Greater
@@ -99,6 +101,7 @@ pub enum Expr {
     Between(Between),
     In(In),
     Case(CaseExpr),
+    Like(Like),
 }
 
 impl Expr {
@@ -251,6 +254,10 @@ impl PrattParserTrait for Expr {
             Some(&TokenKind::Keyword(Keyword::In)) => {
                 let in_ = In::build(Box::new(left), token_table, cursor);
                 in_.map(|e| (Expr::In(e), Flow::Continue))
+            }
+            Some(&TokenKind::Keyword(Keyword::Like)) => {
+                let like = Like::build(Box::new(left), token_table, cursor);
+                like.map(|e| (Expr::Like(e), Flow::Continue))
             }
             _ => Ok((left, Flow::Run)),
         }
@@ -608,6 +615,24 @@ impl In {
         }
 
         Ok(Self { field, values })
+    }
+}
+
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Like {
+    pub field: Box<Expr>,
+    pub pattern: Box<Expr>,
+}
+
+impl Like {
+    pub(crate) fn build(field: Box<Expr>, token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Like))?;
+        *cursor += 1;
+
+        let pattern = Box::new(Expr::parse_primary(token_table, cursor)?);
+
+        Ok(Self { field, pattern })
     }
 }
 

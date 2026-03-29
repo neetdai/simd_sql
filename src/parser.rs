@@ -17,7 +17,8 @@ impl Parser {
     pub fn new() -> Result<Self, ParserError> {
         Ok(Self {
             arena: Bump::new(),
-            keyword_map: KeywordMap::new().map_err(|err| ParserError::AhoCorasickBuild(err.to_string()))?,
+            keyword_map: KeywordMap::new()
+                .map_err(|err| ParserError::AhoCorasickBuild(err.to_string()))?,
         })
     }
 

@@ -1,10 +1,12 @@
-use std::collections::BTreeMap;
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError};
+use std::collections::BTreeMap;
 use strum::{Display, VariantArray, VariantNames};
 
-use minivec::{mini_vec, MiniVec};
+use minivec::{MiniVec, mini_vec};
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Display, strum::VariantArray, strum::AsRefStr)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Clone, Copy, Display, strum::VariantArray, strum::AsRefStr,
+)]
 #[repr(u16)]
 pub enum Keyword {
     Select,
@@ -190,14 +192,13 @@ impl KeywordMap {
     //     self.inner.get(len)
     // }
     pub fn match_keyword(&self, source: &str) -> Option<Keyword> {
-        self.inner.find(source)
-            .and_then(|m| {
-                let match_keyword = Keyword::VARIANTS[m.pattern()];
-                if match_keyword.as_ref().len() == source.len() {
-                    Some(match_keyword)
-                } else {
-                    None
-                }
-            })
+        self.inner.find(source).and_then(|m| {
+            let match_keyword = Keyword::VARIANTS[m.pattern()];
+            if match_keyword.as_ref().len() == source.len() {
+                Some(match_keyword)
+            } else {
+                None
+            }
+        })
     }
 }

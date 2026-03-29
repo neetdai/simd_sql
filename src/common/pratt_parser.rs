@@ -151,7 +151,7 @@ impl PrattParser {
     {
         // 1. 解析第一个原子表达式
         let mut current_left = P::parse_primary(token_table, cursor)?;
-        
+
         // 2. 准备一个栈来存储 (运算符, 左操作数)
         // 栈里的运算符优先级是严格递增的
         let mut stack: Vec<(P::Item, P::Output)> = Vec::new();
@@ -162,7 +162,7 @@ impl PrattParser {
             current_left = new_left;
             match flow {
                 Flow::Continue => continue,
-                Flow::Run => {},
+                Flow::Run => {}
                 Flow::Break => break,
             }
             // 3. 尝试匹配当前的二元运算符
@@ -177,7 +177,7 @@ impl PrattParser {
             // 如果栈顶运算符的优先级 >= 当前运算符的优先级，则进行结合
             while let Some((stack_op, _)) = stack.last() {
                 let stack_prec = stack_op.precedence();
-                
+
                 // 如果是左结合：栈顶优先级 >= 当前优先级，则归约
                 // 如果是右结合：栈顶优先级 >  当前优先级，则归约
                 let should_reduce = if op.is_left_associative() {

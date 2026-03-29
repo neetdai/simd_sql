@@ -1,6 +1,7 @@
 use minivec::MiniVec;
 
 use crate::{
+    ParserError,
     common::{
         alias::Aliasable,
         pratt_parser::{Flow, PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
@@ -8,7 +9,6 @@ use crate::{
     },
     keyword::Keyword,
     token::{TokenKind, TokenTable},
-    ParserError,
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -537,7 +537,7 @@ impl Between {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Between))?;
         *cursor += 1;
 
-        // 
+        //
         let lower = Box::new(Expr::parse_primary(token_table, cursor)?);
 
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::And))?;
@@ -678,6 +678,7 @@ mod test {
     use minivec::mini_vec;
 
     use crate::{
+        ParserError,
         common::{
             alias::Alias,
             expr::{
@@ -687,7 +688,6 @@ mod test {
         },
         keyword::Keyword,
         token::{TokenKind, TokenTable},
-        ParserError,
     };
 
     #[test]

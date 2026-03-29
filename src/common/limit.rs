@@ -1,5 +1,8 @@
 use crate::{
-    ParserError, common::{expr::Expr, utils::expect_kind}, keyword::Keyword, token::{TokenKind, TokenTable}
+    ParserError,
+    common::{expr::Expr, utils::expect_kind},
+    keyword::Keyword,
+    token::{TokenKind, TokenTable},
 };
 
 #[derive(Debug, PartialEq)]
@@ -34,8 +37,8 @@ impl Limit {
             (true, true, false, true) => {
                 let offset = Expr::build(token_table, cursor)?;
                 *cursor += 1; // skip comma
-                let limit = Expr::build(token_table, cursor)?;                
-                
+                let limit = Expr::build(token_table, cursor)?;
+
                 Ok(Limit {
                     offset: Some(offset),
                     limit,
@@ -44,7 +47,7 @@ impl Limit {
             (true, false, true, true) => {
                 let limit = Expr::build(token_table, cursor)?;
                 *cursor += 1; // skip offset
-                let offset = Expr::build(token_table, cursor)?; 
+                let offset = Expr::build(token_table, cursor)?;
                 Ok(Limit {
                     offset: Some(offset),
                     limit,
@@ -52,7 +55,10 @@ impl Limit {
             }
             (true, false, false, false) => {
                 let limit = Expr::build(token_table, cursor)?;
-                Ok(Limit { offset: None, limit })
+                Ok(Limit {
+                    offset: None,
+                    limit,
+                })
             }
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
         }

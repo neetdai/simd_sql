@@ -1,7 +1,11 @@
 use minivec::MiniVec;
 
 use crate::{
-    ParserError, SelectStatement, ast::select::SubSelectStatement, common::{alias::Alias, expr::Expr, utils::expect_kind}, keyword::Keyword, token::{TokenKind, TokenTable}
+    ParserError, SelectStatement,
+    ast::select::SubSelectStatement,
+    common::{alias::Alias, expr::Expr, utils::expect_kind},
+    keyword::Keyword,
+    token::{TokenKind, TokenTable},
 };
 
 #[derive(Debug, PartialEq)]
@@ -71,7 +75,7 @@ impl From {
         cursor: &mut usize,
         mut current: From,
     ) -> Result<Self, ParserError> {
-        dbg!(token_table.get_kind(*cursor));
+        // dbg!(token_table.get_kind(*cursor));
         loop {
             match token_table.get_kind(*cursor) {
                 Some(TokenKind::Keyword(Keyword::Join)) => {

@@ -330,7 +330,8 @@ impl<'a> SimdLexer<'a> {
         //         .copied()
         //         .find(|keyword| keyword.as_str().as_bytes() == tmp.as_slice())
         // }
-        self.keyword_map.match_keyword(unsafe { std::str::from_utf8_unchecked(source) })
+        self.keyword_map
+            .match_keyword(unsafe { std::str::from_utf8_unchecked(source) })
     }
 
     // 匹配字符串

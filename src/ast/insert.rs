@@ -1,7 +1,14 @@
 use minivec::MiniVec;
 
-use crate::{ParserError, common::{expr::Expr, utils::{expect_kind, maybe_kind}}, keyword::Keyword, token::{TokenKind, TokenTable}};
-
+use crate::{
+    ParserError,
+    common::{
+        expr::Expr,
+        utils::{expect_kind, maybe_kind},
+    },
+    keyword::Keyword,
+    token::{TokenKind, TokenTable},
+};
 
 #[derive(Debug, PartialEq)]
 pub struct InsertStatement {
@@ -51,7 +58,7 @@ impl InsertStatement {
 
         expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
         *cursor += 1;
-        
+
         let mut values = MiniVec::new();
         loop {
             match token_table.get_kind(*cursor) {
@@ -74,6 +81,10 @@ impl InsertStatement {
             *cursor += 1;
         }
 
-        Ok(InsertStatement { table, columns, values })
+        Ok(InsertStatement {
+            table,
+            columns,
+            values,
+        })
     }
 }

@@ -1533,6 +1533,7 @@ mod test {
         assert_eq!(cursor, 9);
 
         let expected = Expr::In(In {
+            is_not: false,
             field: Box::new(Expr::Field(Field {
                 prefix: None,
                 value: 0,
@@ -1588,6 +1589,7 @@ mod test {
         assert_eq!(cursor, 9);
 
         let expected = Expr::In(In {
+            is_not: false,
             field: Box::new(Expr::Field(Field {
                 prefix: None,
                 value: 0,

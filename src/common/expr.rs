@@ -29,6 +29,7 @@ pub enum BinaryOperator {
     Between,
     In,
     Like,
+    Not,
 }
 
 impl BinaryOperator {
@@ -63,7 +64,7 @@ impl PrecedenceTrait for BinaryOperator {
             BinaryOperator::Or => 1,
             BinaryOperator::And => 2,
             BinaryOperator::Equal | BinaryOperator::NotEqual => 3,
-            BinaryOperator::Between | BinaryOperator::In | BinaryOperator::Like => 4,
+            BinaryOperator::Not | BinaryOperator::Between | BinaryOperator::In | BinaryOperator::Like => 4,
             BinaryOperator::Less
             | BinaryOperator::LessEqual
             | BinaryOperator::Greater
@@ -141,19 +142,21 @@ impl Expr {
     }
 
     pub(crate) fn class_between(
+        is_not: bool,
         field: Box<Expr>,
         token_table: &TokenTable,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
-        Between::build(field, token_table, cursor).map(Expr::Between)
+        Between::build(is_not, field, token_table, cursor).map(Expr::Between)
     }
 
     pub(crate) fn class_in(
+        is_not: bool,
         field: Box<Expr>,
         token_table: &TokenTable,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
-        In::build(field, token_table, cursor).map(Expr::In)
+        In::build(is_not, field, token_table, cursor).map(Expr::In)
     }
 
     pub(crate) fn class_case(
@@ -247,16 +250,34 @@ impl PrattParserTrait for Expr {
         cursor: &mut usize,
     ) -> Result<(Self::Output, Flow), ParserError> {
         match token_table.get_kind(*cursor) {
+            Some(&TokenKind::Keyword(Keyword::Not)) => {
+                *cursor += 1;
+                match token_table.get_kind(*cursor) {
+                    Some(&TokenKind::Keyword(Keyword::Between)) => {
+                        let between = Between::build(true, Box::new(left), token_table, cursor);
+                        between.map(|e| (Expr::Between(e), Flow::Continue))
+                    },
+                    Some(&TokenKind::Keyword(Keyword::In)) => {
+                        let between = Between::build(false, Box::new(left), token_table, cursor);
+                        between.map(|e| (Expr::Between(e), Flow::Continue))
+                    },
+                    Some(&TokenKind::Keyword(Keyword::Like)) => {
+                        let like = Like::build(true, Box::new(left), token_table, cursor);
+                        like.map(|e| (Expr::Like(e), Flow::Continue))
+                    }
+                    _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
+                }
+            }
             Some(&TokenKind::Keyword(Keyword::Between)) => {
-                let between = Between::build(Box::new(left), token_table, cursor);
+                let between = Between::build(false, Box::new(left), token_table, cursor);
                 between.map(|e| (Expr::Between(e), Flow::Continue))
             }
             Some(&TokenKind::Keyword(Keyword::In)) => {
-                let in_ = In::build(Box::new(left), token_table, cursor);
+                let in_ = In::build(false, Box::new(left), token_table, cursor);
                 in_.map(|e| (Expr::In(e), Flow::Continue))
             }
             Some(&TokenKind::Keyword(Keyword::Like)) => {
-                let like = Like::build(Box::new(left), token_table, cursor);
+                let like = Like::build(false, Box::new(left), token_table, cursor);
                 like.map(|e| (Expr::Like(e), Flow::Continue))
             }
             _ => Ok((left, Flow::Run)),
@@ -530,13 +551,15 @@ impl FromToken for NumbericLiteral {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Between {
-    field: Box<Expr>,
-    lower: Box<Expr>,
-    upper: Box<Expr>,
+    pub is_not: bool,
+    pub field: Box<Expr>,
+    pub lower: Box<Expr>,
+    pub upper: Box<Expr>,
 }
 
 impl Between {
     pub(crate) fn build(
+        is_not: bool,
         field: Box<Expr>,
         token_table: &TokenTable,
         cursor: &mut usize,
@@ -561,6 +584,7 @@ impl Between {
         let upper = Box::new(Expr::parse_primary(token_table, cursor)?);
 
         Ok(Self {
+            is_not,
             field,
             lower,
             upper,
@@ -570,12 +594,14 @@ impl Between {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct In {
-    field: Box<Expr>,
-    values: MiniVec<Expr>,
+    pub is_not: bool,
+    pub field: Box<Expr>,
+    pub values: MiniVec<Expr>,
 }
 
 impl In {
     pub(crate) fn build(
+        is_not: bool,
         field: Box<Expr>,
         token_table: &TokenTable,
         cursor: &mut usize,
@@ -614,25 +640,26 @@ impl In {
             return Err(ParserError::SyntaxError(*cursor, *cursor));
         }
 
-        Ok(Self { field, values })
+        Ok(Self { is_not, field, values })
     }
 }
 
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Like {
+    pub is_not: bool,
     pub field: Box<Expr>,
     pub pattern: Box<Expr>,
 }
 
 impl Like {
-    pub(crate) fn build(field: Box<Expr>, token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    pub(crate) fn build(is_not: bool, field: Box<Expr>, token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Like))?;
         *cursor += 1;
 
         let pattern = Box::new(Expr::parse_primary(token_table, cursor)?);
 
-        Ok(Self { field, pattern })
+        Ok(Self { is_not, field, pattern })
     }
 }
 

@@ -12,4 +12,9 @@ mod token;
 
 pub use {error::ParserError, parser::Parser};
 // pub use common_tmp::Expr;
-pub use ast::select::SelectStatement;
+pub use ast::{
+    select::SelectStatement,
+    insert::InsertStatement,
+    statement::Statement,
+    query::Query,
+};

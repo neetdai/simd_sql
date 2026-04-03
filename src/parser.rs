@@ -1,8 +1,5 @@
 use crate::{
-    SelectStatement,
-    error::ParserError,
-    keyword::KeywordMap,
-    lexer::{Lexer, SimdLexer},
+    SelectStatement, Statement, error::ParserError, keyword::KeywordMap, lexer::{Lexer, SimdLexer}
 };
 use bumpalo::Bump;
 use simdutf8::basic::from_utf8;
@@ -34,7 +31,8 @@ impl Parser {
             }
         };
         let mut cursor = 0;
-        let select = SelectStatement::new(&tokentable, &mut cursor)?;
+        // let select = SelectStatement::new(&tokentable, &mut cursor)?;
+        let statement = Statement::new(&tokentable, &mut cursor)?;
         // dbg!(&select);
         // dbg!(&select.where_statement);
         Ok(())

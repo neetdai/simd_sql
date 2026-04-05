@@ -225,21 +225,60 @@ impl PrattParserTrait for Expr {
         }
     }
 
-    fn match_item(token_kind: &TokenKind) -> Option<Self::Item> {
-        match token_kind {
-            TokenKind::Plus => Some(BinaryOperator::Add),
-            TokenKind::Subtract => Some(BinaryOperator::Subtract),
-            TokenKind::Multiply => Some(BinaryOperator::Multiply),
-            TokenKind::Divide => Some(BinaryOperator::Divide),
-            TokenKind::Mod => Some(BinaryOperator::Mod),
-            TokenKind::Equal => Some(BinaryOperator::Equal),
-            TokenKind::NotEqual => Some(BinaryOperator::NotEqual),
-            TokenKind::Less => Some(BinaryOperator::Less),
-            TokenKind::LessEqual => Some(BinaryOperator::LessEqual),
-            TokenKind::Greater => Some(BinaryOperator::Greater),
-            TokenKind::GreaterEqual => Some(BinaryOperator::GreaterEqual),
-            TokenKind::Keyword(Keyword::And) => Some(BinaryOperator::And),
-            TokenKind::Keyword(Keyword::Or) => Some(BinaryOperator::Or),
+    fn match_item(token_table: &TokenTable, cursor: &mut usize) -> Option<Self::Item> {
+        match token_table.get_kind(*cursor) {
+            Some(TokenKind::Plus) => {
+                *cursor += 1;
+                Some(BinaryOperator::Add)
+            }
+            Some(TokenKind::Subtract) => {
+                *cursor += 1;
+                Some(BinaryOperator::Subtract)
+            }
+            Some(TokenKind::Multiply) => {
+                *cursor += 1;
+                Some(BinaryOperator::Multiply)
+            }
+            Some(TokenKind::Divide) => {
+                *cursor += 1;
+                Some(BinaryOperator::Divide)
+            }
+            Some(TokenKind::Mod) => {
+                *cursor += 1;
+                Some(BinaryOperator::Mod)
+            }
+            Some(TokenKind::Equal) => {
+                *cursor += 1;
+                Some(BinaryOperator::Equal)
+            }
+            Some(TokenKind::NotEqual) => {
+                *cursor += 1;
+                Some(BinaryOperator::NotEqual)
+            }
+            Some(TokenKind::Less) => {
+                *cursor += 1;
+                Some(BinaryOperator::Less)
+            }
+            Some(TokenKind::LessEqual) => {
+                *cursor += 1;
+                Some(BinaryOperator::LessEqual)
+            }
+            Some(TokenKind::Greater) => {
+                *cursor += 1;
+                Some(BinaryOperator::Greater)
+            }
+            Some(TokenKind::GreaterEqual) => {
+                *cursor += 1;
+                Some(BinaryOperator::GreaterEqual)
+            }
+            Some(TokenKind::Keyword(Keyword::And)) => {
+                *cursor += 1;
+                Some(BinaryOperator::And)
+            }
+            Some(TokenKind::Keyword(Keyword::Or)) => {
+                *cursor += 1;
+                Some(BinaryOperator::Or)
+            }
             _ => None,
         }
     }

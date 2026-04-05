@@ -6,6 +6,7 @@ use crate::error::ParserError;
 #[derive(Debug, PartialEq)]
 pub enum SetOperator {
     Union,
+    UnionAll,
     Intersect,
     Except,
 }
@@ -13,7 +14,7 @@ pub enum SetOperator {
 impl PrecedenceTrait for SetOperator {
     fn precedence(&self) -> usize {
         match self {
-            SetOperator::Union => 1,
+            SetOperator::Union | SetOperator::UnionAll => 1,
             SetOperator::Intersect => 2,
             SetOperator::Except => 3,
         }
@@ -67,11 +68,25 @@ impl PrattParserTrait for Query {
     type Item = SetOperator;
     type Output = Self;
 
-    fn match_item(token_kind: &TokenKind) -> Option<Self::Item> {
-        match token_kind {
-            TokenKind::Keyword(Keyword::Union) => Some(SetOperator::Union),
-            TokenKind::Keyword(Keyword::Intersect) => Some(SetOperator::Intersect),
-            TokenKind::Keyword(Keyword::Except) => Some(SetOperator::Except),
+    fn match_item(token_table: &TokenTable, cursor: &mut usize) -> Option<Self::Item> {
+        match token_table.get_kind(*cursor) {
+            Some(TokenKind::Keyword(Keyword::Union)) => {
+                *cursor += 1;
+                if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::All)) {
+                    *cursor += 1;
+                    Some(SetOperator::UnionAll)
+                } else {
+                    Some(SetOperator::Union)
+                }
+            },
+            Some(TokenKind::Keyword(Keyword::Intersect)) => {
+                *cursor += 1;
+                Some(SetOperator::Intersect)
+            },
+            Some(TokenKind::Keyword(Keyword::Except)) => {
+                *cursor += 1;
+                Some(SetOperator::Except)
+            },
             _ => None,
         }
     }

@@ -31,7 +31,7 @@ pub(crate) trait PrattParserTrait {
         cursor: &mut usize,
     ) -> Result<Self::Output, ParserError>;
 
-    fn match_item(token_kind: &TokenKind) -> Option<Self::Item>;
+    fn match_item(token_table: &TokenTable, cursor: &mut usize) -> Option<Self::Item>;
 
     fn parse_postfix(
         left: Self::Output,
@@ -160,14 +160,18 @@ impl PrattParser {
             // 处理后缀运算符（如函数调用 () 或 成员访问 .）
             let (new_left, flow) = P::parse_postfix(current_left, token_table, cursor)?;
             current_left = new_left;
-            dbg!(&flow);
+            // dbg!(&flow);
             match flow {
                 Flow::Continue => continue,
                 Flow::Run => {}
                 Flow::Break => break,
             }
-            // 3. 尝试匹配当前的二元运算符
-            let op = match token_table.get_kind(*cursor).and_then(P::match_item) {
+            // // 3. 尝试匹配当前的二元运算符
+            // let op = match token_table.get_kind(*cursor).and_then(P::match_item) {
+            //     Some(op) => op,
+            //     None => break, // 没有更多运算符，准备结束
+            // };
+            let op = match P::match_item(token_table, cursor) {
                 Some(op) => op,
                 None => break, // 没有更多运算符，准备结束
             };
@@ -197,7 +201,7 @@ impl PrattParser {
 
             // 5. 将当前运算符和当前的“左侧结果”入栈，继续寻找右侧
             stack.push((op, current_left));
-            *cursor += 1; // 消耗运算符
+            // *cursor += 1; // 消耗运算符
 
             // 6. 解析运算符右侧的原子表达式，作为下一次循环的新 current_left
             current_left = P::parse_primary(token_table, cursor)?;

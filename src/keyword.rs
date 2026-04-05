@@ -57,6 +57,8 @@ pub enum Keyword {
     Full,
     Outer,
     Cross,
+    Intersect,
+    Except,
 }
 
 // impl std::str::FromStr for Keyword {

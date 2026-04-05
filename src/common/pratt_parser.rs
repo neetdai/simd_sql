@@ -42,7 +42,7 @@ pub(crate) trait PrattParserTrait {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum Flow {
     Continue,
     Run,
@@ -160,6 +160,7 @@ impl PrattParser {
             // 处理后缀运算符（如函数调用 () 或 成员访问 .）
             let (new_left, flow) = P::parse_postfix(current_left, token_table, cursor)?;
             current_left = new_left;
+            dbg!(&flow);
             match flow {
                 Flow::Continue => continue,
                 Flow::Run => {}

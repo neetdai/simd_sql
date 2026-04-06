@@ -3,13 +3,15 @@ use minivec::MiniVec;
 use super::{
     select::SelectStatement,
     insert::InsertStatement,
+    update::UpdateStatement,
 };
-use crate::{ast::query::Query, common::utils::maybe_kind, error::ParserError, keyword::Keyword, token::{TokenKind, TokenTable}};
+use crate::{ast::{query::Query}, common::utils::maybe_kind, error::ParserError, keyword::Keyword, token::{TokenKind, TokenTable}};
 
 #[derive(Debug, PartialEq)]
 pub enum Statement {
     Query(Query),
     Insert(InsertStatement),
+    Update(UpdateStatement),
 }
 
 impl Statement {
@@ -23,6 +25,7 @@ impl Statement {
                 Query::build(token_table, cursor).map(Self::Query)
             },
             Some(TokenKind::Keyword(Keyword::Insert)) => Ok(Self::Insert(InsertStatement::new(token_table, cursor)?)),
+            Some(TokenKind::Keyword(Keyword::Update)) => Ok(Self::Update(UpdateStatement::new(token_table, cursor)?)),
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
         }
     }

@@ -1,4 +1,4 @@
-use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError};
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError, MatchKind};
 use std::collections::BTreeMap;
 use strum::{Display, VariantArray, VariantNames};
 
@@ -186,6 +186,7 @@ impl KeywordMap {
     pub fn new() -> Result<Self, BuildError> {
         let inner = AhoCorasickBuilder::new()
             .ascii_case_insensitive(true)
+            .match_kind(MatchKind::LeftmostLongest)
             .build(Keyword::VARIANTS.iter().map(|v| v.as_ref().to_string()))?;
         Ok(Self { inner })
     }

@@ -491,18 +491,25 @@ impl FromToken for FunctionCall {
         *cursor += 2;
 
         let mut args = MiniVec::with_capacity(8);
+        let mut is_comma = false;
         loop {
-            let expr = Expr::build(token_table, cursor)?;
-            args.push(expr);
-
             match token_table.get_kind(*cursor) {
                 Some(TokenKind::Comma) => {
                     *cursor += 1;
+                    is_comma = true;
                     continue;
                 }
                 Some(TokenKind::RightParen) => {
+                    if is_comma {
+                        return Err(ParserError::SyntaxError(*cursor, *cursor));
+                    }
                     *cursor += 1;
                     break;
+                }
+                Some(_) => {
+                    let expr = Expr::build(token_table, cursor)?;
+                    args.push(expr);
+                    is_comma = false;
                 }
                 _ => {
                     return Err(ParserError::SyntaxError(*cursor, *cursor));

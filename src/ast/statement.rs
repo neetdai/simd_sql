@@ -5,13 +5,14 @@ use super::{
     insert::InsertStatement,
     update::UpdateStatement,
 };
-use crate::{ast::{query::Query}, common::utils::maybe_kind, error::ParserError, keyword::Keyword, token::{TokenKind, TokenTable}};
+use crate::{ast::{delete::DeleteStatement, query::Query}, common::utils::maybe_kind, error::ParserError, keyword::Keyword, token::{TokenKind, TokenTable}};
 
 #[derive(Debug, PartialEq)]
 pub enum Statement {
     Query(Query),
     Insert(InsertStatement),
     Update(UpdateStatement),
+    Delete(DeleteStatement),
 }
 
 impl Statement {
@@ -26,6 +27,7 @@ impl Statement {
             },
             Some(TokenKind::Keyword(Keyword::Insert)) => Ok(Self::Insert(InsertStatement::new(token_table, cursor)?)),
             Some(TokenKind::Keyword(Keyword::Update)) => Ok(Self::Update(UpdateStatement::new(token_table, cursor)?)),
+            Some(TokenKind::Keyword(Keyword::Delete)) => Ok(Self::Delete(DeleteStatement::new(token_table, cursor)?)),
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
         }
     }

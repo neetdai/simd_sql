@@ -15,6 +15,14 @@ pub enum Table {
 }
 
 impl Table {
+    pub(crate) fn class_name_with_single(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+        let expr = Expr::class_field(token_table, cursor)?;
+        Ok(Self::Name(Alias {
+            name: None,
+            value: expr
+        }))
+    }
+
     pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         if let Some(TokenKind::LeftParen) = token_table.get_kind(*cursor) {
             let alias = Alias::new(token_table, cursor)?;

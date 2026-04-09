@@ -3,8 +3,7 @@ use minivec::MiniVec;
 use crate::{
     ParserError,
     common::{
-        expr::Expr,
-        utils::{expect_kind, maybe_kind},
+        expr::Expr, from::Table, utils::{expect_kind, maybe_kind}
     },
     keyword::Keyword,
     token::{TokenKind, TokenTable},
@@ -12,9 +11,9 @@ use crate::{
 
 #[derive(Debug, PartialEq)]
 pub struct InsertStatement {
-    pub table: Expr,
+    pub table: Table,
     pub columns: MiniVec<Expr>,
-    pub values: MiniVec<Expr>,
+    pub values: MiniVec<MiniVec<Expr>>,
 }
 
 impl InsertStatement {
@@ -29,7 +28,7 @@ impl InsertStatement {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Into))?;
         *cursor += 1;
 
-        let table = Expr::build(token_table, cursor)?;
+        let table = Table::class_name_with_single(token_table, cursor)?;
 
         expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
         *cursor += 1;
@@ -42,7 +41,6 @@ impl InsertStatement {
                     *cursor += 1;
                 }
                 Some(TokenKind::RightParen) => {
-                    *cursor += 1;
                     break;
                 }
                 Some(_) => {
@@ -52,28 +50,41 @@ impl InsertStatement {
                 None => break,
             }
         }
-
-        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Values))?;
+        expect_kind(token_table, cursor, &TokenKind::RightParen)?;
         *cursor += 1;
 
-        expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
+        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Values))?;
         *cursor += 1;
 
         let mut values = MiniVec::new();
         loop {
             match token_table.get_kind(*cursor) {
+                Some(TokenKind::LeftParen) => {
+                    *cursor += 1;
+                    let mut value_row = MiniVec::new();
+                    loop {
+                        match token_table.get_kind(*cursor) {
+                            Some(TokenKind::Comma) => {
+                                *cursor += 1;
+                            }
+                            Some(TokenKind::RightParen) => {
+                                break;
+                            }
+                            Some(_) => {
+                                let value = Expr::build(token_table, cursor)?;
+                                value_row.push(value);
+                            }
+                            None => break,
+                        }
+                    }
+                    expect_kind(token_table, cursor, &TokenKind::RightParen)?;
+                    *cursor += 1;
+                    values.push(value_row);
+                }
                 Some(TokenKind::Comma) => {
                     *cursor += 1;
                 }
-                Some(TokenKind::RightParen) => {
-                    *cursor += 1;
-                    break;
-                }
-                Some(_) => {
-                    let value = Expr::build(token_table, cursor)?;
-                    values.push(value);
-                }
-                None => break,
+                _ => break,
             }
         }
 

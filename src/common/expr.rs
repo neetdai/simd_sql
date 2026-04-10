@@ -1,17 +1,14 @@
 use minivec::MiniVec;
 
 use crate::{
-    ParserError,
-    common::{
+    ParserError, SelectStatement, ast::select::SubSelectStatement, common::{
         alias::Aliasable,
         pratt_parser::{Flow, PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
         utils::{expect_kind, maybe_kind},
-    },
-    keyword::Keyword,
-    token::{TokenKind, TokenTable},
+    }, keyword::Keyword, token::{TokenKind, TokenTable}
 };
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq)]
 pub enum BinaryOperator {
     Add,
     Subtract,
@@ -84,14 +81,14 @@ impl PrecedenceTrait for BinaryOperator {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct BinaryOp {
     pub op: BinaryOperator,
     pub left: Expr,
     pub right: Expr,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub enum Expr {
     Field(Field),
     Star(Star),
@@ -370,7 +367,7 @@ impl Alias {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct Field {
     pub(crate) prefix: Option<usize>,
     pub(crate) value: usize,
@@ -421,7 +418,7 @@ impl FromToken for Field {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct Star {
     pub prefix: Option<usize>,
 }
@@ -463,7 +460,7 @@ impl FromToken for Star {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct FunctionCall {
     name: usize,
     args: MiniVec<Expr>,
@@ -555,7 +552,7 @@ impl FromToken for FunctionCall {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct StringLiteral {
     value: usize,
 }
@@ -575,7 +572,7 @@ impl FromToken for StringLiteral {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct NumbericLiteral {
     value: usize,
 }
@@ -595,7 +592,7 @@ impl FromToken for NumbericLiteral {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct Between {
     pub is_not: bool,
     pub field: Box<Expr>,
@@ -638,11 +635,17 @@ impl Between {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct In {
     pub is_not: bool,
     pub field: Box<Expr>,
-    pub values: MiniVec<Expr>,
+    pub in_value: InValue,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum InValue {
+    List(MiniVec<Expr>),
+    Subquery(SubSelectStatement),
 }
 
 impl In {
@@ -658,40 +661,48 @@ impl In {
         expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
         *cursor += 1;
 
-        let mut values = MiniVec::with_capacity(8);
-        loop {
-            match token_table.get_kind(*cursor) {
-                Some(TokenKind::Comma) => {
-                    *cursor += 1;
-                    continue;
-                }
-                Some(TokenKind::RightParen) => {
-                    *cursor += 1;
-                    break;
-                }
-                Some(TokenKind::Keyword(_)) => {
-                    break;
-                }
-                Some(_) => {
-                    let value = Expr::parse_primary(token_table, cursor)?;
-                    values.push(value);
-                }
-                _ => {
-                    return Err(ParserError::SyntaxError(*cursor, *cursor));
+        let in_value = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Select)) {
+            InValue::Subquery(Box::new(SelectStatement::new(token_table, cursor)?))
+        } else {
+            let mut values = MiniVec::with_capacity(8);
+            loop {
+                match token_table.get_kind(*cursor) {
+                    Some(TokenKind::Comma) => {
+                        *cursor += 1;
+                        continue;
+                    }
+                    Some(TokenKind::RightParen) => {
+                        break;
+                    }
+                    Some(TokenKind::Keyword(_)) => {
+                        break;
+                    }
+                    Some(_) => {
+                        let value = Expr::parse_primary(token_table, cursor)?;
+                        values.push(value);
+                    }
+                    _ => {
+                        return Err(ParserError::SyntaxError(*cursor, *cursor));
+                    }
                 }
             }
-        }
+            if values.is_empty() {
+                return Err(ParserError::SyntaxError(*cursor, *cursor));
+            }
+            InValue::List(values)
+        };
 
-        if values.is_empty() {
-            return Err(ParserError::SyntaxError(*cursor, *cursor));
-        }
+        expect_kind(token_table, cursor, &TokenKind::RightParen)?;
+        *cursor += 1;
 
-        Ok(Self { is_not, field, values })
+        
+
+        Ok(Self { is_not, field, in_value })
     }
 }
 
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct Like {
     pub is_not: bool,
     pub field: Box<Expr>,
@@ -709,14 +720,14 @@ impl Like {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct CaseExpr {
     pub condition: Option<Box<Expr>>,
     pub when_clauses: MiniVec<WhenClause>,
     pub else_result: Option<Box<Expr>>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct WhenClause {
     pub condition: Box<Expr>,
     pub result: Box<Expr>,
@@ -780,8 +791,7 @@ mod test {
         common::{
             alias::Alias,
             expr::{
-                Between, BinaryOp, BinaryOperator, Expr, Field, FunctionCall, In, NumbericLiteral,
-                Star, StringLiteral,
+                Between, BinaryOp, BinaryOperator, Expr, Field, FunctionCall, In, InValue, NumbericLiteral, Star, StringLiteral
             },
         },
         keyword::Keyword,
@@ -1584,11 +1594,11 @@ mod test {
                 prefix: None,
                 value: 0,
             })),
-            values: mini_vec![
+            in_value: InValue::List(mini_vec![
                 Expr::NumbericLiteral(NumbericLiteral { value: 3 }),
                 Expr::NumbericLiteral(NumbericLiteral { value: 5 }),
                 Expr::StringLiteral(StringLiteral { value: 7 }),
-            ],
+            ]),
         });
         assert_eq!(expr, expected);
     }
@@ -1609,7 +1619,11 @@ mod test {
 
         let expr = result.unwrap();
         if let Expr::In(in_expr) = expr {
-            assert_eq!(in_expr.values.len(), 1);
+            if let InValue::List(list) = in_expr.in_value {
+                assert_eq!(list.len(), 1);
+            } else {
+                panic!("Expected In expression");
+            }
         } else {
             panic!("Expected In expression");
         }
@@ -1640,7 +1654,7 @@ mod test {
                 prefix: None,
                 value: 0,
             })),
-            values: mini_vec![
+            in_value: InValue::List(mini_vec![
                 Expr::Field(Field {
                     prefix: None,
                     value: 3
@@ -1653,7 +1667,7 @@ mod test {
                     prefix: None,
                     value: 7
                 }),
-            ],
+            ]),
         });
         assert_eq!(expr, expected);
     }

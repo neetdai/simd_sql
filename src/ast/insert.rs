@@ -17,7 +17,7 @@ pub struct InsertStatement {
 }
 
 impl InsertStatement {
-    pub fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    pub(crate) fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         Self::build_ast(token_table, cursor)
     }
 

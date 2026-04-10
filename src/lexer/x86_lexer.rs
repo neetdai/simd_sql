@@ -204,7 +204,7 @@ impl<'a> SimdLexer<'a> {
             if CHAR_TABLE[*c as usize] & C_DIG == 0 {
                 break;
             }
-            pos += 1;
+            pos = index;
         }
 
         self.position = pos;
@@ -657,7 +657,7 @@ mod tests {
             token,
             TokenTable {
                 tokens: vec![TokenKind::Number,],
-                positions: vec![(0, 10)],
+                positions: vec![(0, 9)],
             }
         );
 
@@ -671,7 +671,7 @@ mod tests {
             token,
             TokenTable {
                 tokens: vec![TokenKind::Number, TokenKind::Number],
-                positions: vec![(0, 42), (43, 71)],
+                positions: vec![(0, 41), (43, 70)],
             }
         );
 
@@ -681,7 +681,7 @@ mod tests {
             token,
             TokenTable {
                 tokens: vec![TokenKind::Number],
-                positions: vec![(0, 4)],
+                positions: vec![(0, 3)],
             }
         );
     }
@@ -803,7 +803,7 @@ mod tests {
             token,
             TokenTable {
                 tokens: vec![TokenKind::Identifier, TokenKind::Number],
-                positions: vec![(0, 36), (38, 48)],
+                positions: vec![(0, 36), (38, 47)],
             }
         );
     }
@@ -840,6 +840,58 @@ mod tests {
                     TokenKind::Identifier,
                 ],
                 positions: vec![(0, 5), (7, 7), (9, 12), (14, 14)],
+            }
+        );
+    }
+
+    #[test]
+    fn test_sql2() {
+        let keyword_map = KeywordMap::new().unwrap();
+        let mut lexer = SimdLexer::new("select * from a where b in (1,2,3) and c = 1", &keyword_map).unwrap();
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(
+            tokens,
+            TokenTable {
+                tokens: vec![
+                    TokenKind::Keyword(Keyword::Select),
+                    TokenKind::Multiply,
+                    TokenKind::Keyword(Keyword::From),
+                    TokenKind::Identifier,
+                    TokenKind::Keyword(Keyword::Where),
+                    TokenKind::Identifier,
+                    TokenKind::Keyword(Keyword::In),
+                    TokenKind::LeftParen,
+                    TokenKind::Number,
+                    TokenKind::Comma,
+                    TokenKind::Number,
+                    TokenKind::Comma,
+                    TokenKind::Number,
+                    TokenKind::RightParen,
+                    TokenKind::Keyword(Keyword::And),
+                    TokenKind::Identifier,
+                    TokenKind::Equal,
+                    TokenKind::Number
+                ],
+                positions: vec![
+                    (0, 5),
+                    (7, 7),
+                    (9, 12),
+                    (14, 14),
+                    (16, 20),
+                    (22, 22),
+                    (24, 25),
+                    (27, 27),
+                    (28, 28),
+                    (29, 29),
+                    (30, 30),
+                    (31, 31),
+                    (32, 32),
+                    (33, 33),
+                    (35, 37),
+                    (39, 39),
+                    (41, 41),
+                    (43, 43),
+                ]
             }
         );
     }

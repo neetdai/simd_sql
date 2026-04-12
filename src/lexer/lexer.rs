@@ -52,7 +52,7 @@ impl<'a> Lexer<'a> {
     #[inline]
     fn match_identify(&mut self) -> Result<(TokenKind, usize, usize), ParserError> {
         let start_position = self.position;
-        while let Some((index, _)) = self.inner.next_if(|(_, c)| c.is_alphabetic() || *c == 'c') {
+        while let Some((index, _)) = self.inner.next_if(|(_, c)| c.is_alphabetic() || *c == '_') {
             self.position = index;
         }
         let end_position = self.position;
@@ -262,6 +262,12 @@ impl<'a> Lexer<'a> {
                         }
                         '%' => {
                             let (kind, start, end) = (TokenKind::Mod, *index, *index);
+                            self.position = *index;
+                            self.inner.next();
+                            table.push(kind, start, end);
+                        }
+                        '.' => {
+                            let (kind, start, end) = (TokenKind::Dot, *index, *index);
                             self.position = *index;
                             self.inner.next();
                             table.push(kind, start, end);

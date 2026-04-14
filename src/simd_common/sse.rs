@@ -1,9 +1,9 @@
 use std::arch::x86_64;
 use super::common::SimdTrait;
 
-pub(crate) struct Sse4;
+pub(crate) struct Sse;
 
-impl SimdTrait for Sse4 {
+impl SimdTrait for Sse {
     const LENGTH: usize = 16;
 
     fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, usize) {
@@ -83,23 +83,23 @@ impl SimdTrait for Sse4 {
 }
 
 mod test {
-    use crate::simd_common::{Sse4, SimdTrait};
+    use crate::simd_common::{Sse, SimdTrait};
 
 
     #[test]
-    fn sse4_test1() {
+    fn sse_test1() {
         let slice = b"1234567890qwertyuiopasdfghjklzxcvbnm";
-        let (start, end) = Sse4::find_consecutive_in_range(slice, (b'0', b'9'), 0);
+        let (start, end) = Sse::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
         assert_eq!(end, 9);
 
         let slice = b"12345678901234567890123456789012334567890";
-        let (start, end) = Sse4::find_consecutive_in_range(slice, (b'0', b'9'), 0);
+        let (start, end) = Sse::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
         assert_eq!(end, 31);
 
         let slice = b"bqwertyuiopasdfghjklzxcvbnm";
-        let (start, end) = Sse4::find_consecutive_in_range(slice, (b'0', b'9'), 0);
+        let (start, end) = Sse::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
         assert_eq!(end, 0);
     }

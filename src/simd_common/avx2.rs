@@ -122,5 +122,10 @@ mod test {
         let (start, end) = Avx2::longest_consecutive_matching(slice, [b'a', b'b', b'c'], 0);
         assert_eq!(start, 0);
         assert_eq!(end, 31);
+
+        let slice = b"qwretyuiopasdfghjklzxcvbnm1234567890";
+        let (start, end) = Avx2::longest_consecutive_matching(slice, [b'q', b'w', b'e'], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 1);
     }
 }

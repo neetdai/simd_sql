@@ -67,7 +67,7 @@ impl SimdTrait for Sse {
 
                 let mask = x86_64::_mm_movemask_epi8(cmp);
 
-                if mask != 0 {
+                if mask != (u16::MAX as i32) {
                     let trailing_ones = mask.trailing_ones();
                     pos += trailing_ones as usize;
                     end_pos = pos - 1;
@@ -76,6 +76,12 @@ impl SimdTrait for Sse {
                     pos += Self::LENGTH;
                 }
             }
+        }
+
+        if start_pos == pos {
+            end_pos = pos;
+        } else {
+            end_pos = pos - 1;
         }
 
         (start_pos, end_pos)
@@ -102,5 +108,23 @@ mod test {
         let (start, end) = Sse::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
         assert_eq!(end, 0);
+    }
+
+    #[test]
+    fn sse_test2() {
+        let slice = b"qwertyuiopasdfghjklzxcvbnm1234567890";
+        let (start, end) = Sse::longest_consecutive_matching(slice, [b'q', b'w', b'e'], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 2);
+
+        let slice = b"aaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbaaaaaaaaaaaaaaaaa";
+        let (start, end) = Sse::longest_consecutive_matching(slice, [b'a', b'b', b'c'], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 47);
+
+        let slice = b"qwretyuiopasdfghjklzxcvbnm1234567890";
+        let (start, end) = Sse::longest_consecutive_matching(slice, [b'q', b'w', b'e'], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 1);
     }
 }

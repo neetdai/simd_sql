@@ -11,9 +11,7 @@ use std::{
 use minivec::MiniVec;
 
 use crate::{
-    error::ParserError,
-    keyword::{Keyword, KeywordMap},
-    token::{TokenKind, TokenTable},
+    error::ParserError, find_consecutive_in_range, keyword::{Keyword, KeywordMap}, longest_consecutive_matching, simd_common::{Avx2, SimdTrait}, token::{TokenKind, TokenTable}
 };
 
 // ============================================================================
@@ -90,125 +88,128 @@ impl<'a> SimdLexer<'a> {
 
     // #[inline]
     fn skip_whitespace(&mut self) {
-        let length = self.inner.len();
-        let mut pos = self.position;
-        if is_x86_feature_detected!("avx2") {
-            while pos + 32 < length {
-                let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos + 32]);
+        // let length = self.inner.len();
+        // let mut pos = self.position;
+        // if is_x86_feature_detected!("avx2") {
+        //     while pos + 32 < length {
+        //         let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos + 32]);
 
-                let space = Simd::<u8, 32>::splat(b' ');
-                let tab = Simd::<u8, 32>::splat(b'\t');
-                let newline = Simd::<u8, 32>::splat(b'\n');
-                let cr = Simd::<u8, 32>::splat(b'\r');
+        //         let space = Simd::<u8, 32>::splat(b' ');
+        //         let tab = Simd::<u8, 32>::splat(b'\t');
+        //         let newline = Simd::<u8, 32>::splat(b'\n');
+        //         let cr = Simd::<u8, 32>::splat(b'\r');
 
-                let mask = slice.simd_eq(space)
-                    | slice.simd_eq(tab)
-                    | slice.simd_eq(newline)
-                    | slice.simd_eq(cr);
-                if mask.all() {
-                    pos += 32;
-                } else {
-                    let result = (!mask).to_bitmask();
-                    let index = result.trailing_zeros() as usize;
-                    pos += index;
+        //         let mask = slice.simd_eq(space)
+        //             | slice.simd_eq(tab)
+        //             | slice.simd_eq(newline)
+        //             | slice.simd_eq(cr);
+        //         if mask.all() {
+        //             pos += 32;
+        //         } else {
+        //             let result = (!mask).to_bitmask();
+        //             let index = result.trailing_zeros() as usize;
+        //             pos += index;
 
-                    break;
-                }
-            }
-        }
+        //             break;
+        //         }
+        //     }
+        // }
 
-        if is_x86_feature_detected!("sse4.2") {
-            while pos + 16 < length {
-                let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
+        // if is_x86_feature_detected!("sse4.2") {
+        //     while pos + 16 < length {
+        //         let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
 
-                let space = Simd::<u8, 16>::splat(b' ');
-                let tab = Simd::<u8, 16>::splat(b'\t');
-                let newline = Simd::<u8, 16>::splat(b'\n');
-                let cr = Simd::<u8, 16>::splat(b'\r');
+        //         let space = Simd::<u8, 16>::splat(b' ');
+        //         let tab = Simd::<u8, 16>::splat(b'\t');
+        //         let newline = Simd::<u8, 16>::splat(b'\n');
+        //         let cr = Simd::<u8, 16>::splat(b'\r');
 
-                let mask = slice.simd_eq(space)
-                    | slice.simd_eq(tab)
-                    | slice.simd_eq(newline)
-                    | slice.simd_eq(cr);
-                if mask.all() {
-                    pos += 16;
-                } else {
-                    let result = (!mask).to_bitmask();
-                    let index = result.trailing_zeros() as usize;
-                    pos += index;
+        //         let mask = slice.simd_eq(space)
+        //             | slice.simd_eq(tab)
+        //             | slice.simd_eq(newline)
+        //             | slice.simd_eq(cr);
+        //         if mask.all() {
+        //             pos += 16;
+        //         } else {
+        //             let result = (!mask).to_bitmask();
+        //             let index = result.trailing_zeros() as usize;
+        //             pos += index;
 
-                    break;
-                }
-            }
-        }
+        //             break;
+        //         }
+        //     }
+        // }
 
-        let tmp_pos = pos;
-        for index in tmp_pos..length {
-            let c = &self.inner[index];
-            if (CHAR_TABLE[*c as usize] & C_WSP) == 0 {
-                break;
-            }
-            pos += 1;
-        }
-        self.position = pos;
+        // let tmp_pos = pos;
+        // for index in tmp_pos..length {
+        //     let c = &self.inner[index];
+        //     if (CHAR_TABLE[*c as usize] & C_WSP) == 0 {
+        //         break;
+        //     }
+        //     pos += 1;
+        // }
+        let (_, end) = longest_consecutive_matching(self.inner, [b' ', b'\t', b'\n', b'\r'], self.position);
+        self.position = end;
     }
 
     // #[inline]
     fn scan_number(&mut self) -> Result<(TokenKind, usize, usize), ParserError> {
-        let start = self.position;
-        let mut pos = start;
-        let length = self.inner.len();
+        // let start = self.position;
+        // let mut pos = start;
+        // let length = self.inner.len();
 
-        if is_x86_feature_detected!("avx2") {
-            while pos + 32 < length {
-                let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos + 32]);
+        // if is_x86_feature_detected!("avx2") {
+        //     while pos + 32 < length {
+        //         let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos + 32]);
 
-                let min = Simd::<u8, 32>::splat(b'0' - 1);
-                let max = Simd::<u8, 32>::splat(b'9' + 1);
-                let mask = slice.simd_gt(min) & slice.simd_lt(max);
+        //         let min = Simd::<u8, 32>::splat(b'0' - 1);
+        //         let max = Simd::<u8, 32>::splat(b'9' + 1);
+        //         let mask = slice.simd_gt(min) & slice.simd_lt(max);
 
-                if mask.all() {
-                    pos += 32;
-                } else {
-                    let result = mask.to_bitmask();
-                    let index = result.trailing_zeros() as usize;
-                    pos += index;
-                    break;
-                }
-            }
-        }
+        //         if mask.all() {
+        //             pos += 32;
+        //         } else {
+        //             let result = mask.to_bitmask();
+        //             let index = result.trailing_zeros() as usize;
+        //             pos += index;
+        //             break;
+        //         }
+        //     }
+        // }
 
-        if is_x86_feature_detected!("sse4.2") {
-            while pos + 16 < length {
-                let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
+        // if is_x86_feature_detected!("sse4.2") {
+        //     while pos + 16 < length {
+        //         let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
 
-                let min = Simd::<u8, 16>::splat(b'0' - 1);
-                let max = Simd::<u8, 16>::splat(b'9' + 1);
+        //         let min = Simd::<u8, 16>::splat(b'0' - 1);
+        //         let max = Simd::<u8, 16>::splat(b'9' + 1);
 
-                let mask = slice.simd_ge(min) & slice.simd_le(max);
+        //         let mask = slice.simd_ge(min) & slice.simd_le(max);
 
-                if mask.all() {
-                    pos += 16;
-                } else {
-                    let result = mask.to_bitmask();
-                    let trailling_zeros = result.trailing_zeros();
-                    pos += trailling_zeros as usize;
-                    break;
-                }
-            }
-        }
+        //         if mask.all() {
+        //             pos += 16;
+        //         } else {
+        //             let result = mask.to_bitmask();
+        //             let trailling_zeros = result.trailing_zeros();
+        //             pos += trailling_zeros as usize;
+        //             break;
+        //         }
+        //     }
+        // }
 
-        let tmp_pos = pos;
-        for index in tmp_pos..length {
-            let c = &self.inner[index];
-            if CHAR_TABLE[*c as usize] & C_DIG == 0 {
-                break;
-            }
-            pos = index;
-        }
+        // let tmp_pos = pos;
+        // for index in tmp_pos..length {
+        //     let c = &self.inner[index];
+        //     if CHAR_TABLE[*c as usize] & C_DIG == 0 {
+        //         break;
+        //     }
+        //     pos = index;
+        // }
 
-        self.position = pos;
-        let end = pos;
+        // self.position = pos;
+        // let end = pos;
+        let (start, end) = find_consecutive_in_range(&self.inner, (b'0', b'9'), self.position);
+        self.position = end;
 
         Ok((TokenKind::Number, start, end))
     }

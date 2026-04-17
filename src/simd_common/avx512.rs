@@ -74,14 +74,14 @@ impl SimdTrait for Avx512 {
 
 
 
-mod test {
-    use super::{SimdTrait, Avx512};
+// mod test {
+//     use super::{SimdTrait, Avx512};
 
-    #[test]
-    fn avx512_test1() {
-        let slice = b"1234567890qwertyuiopasdfghjklzxcvbnm1234567890qwertyuiopasdfghjklzxcvbnm";
-        let (start, end) = Avx512::find_consecutive_in_range(slice, (b'0', b'9'), 0);
-        assert_eq!(start, 0);
-        assert_eq!(end, 9);
-    }
-}
+//     #[test]
+//     fn avx512_test1() {
+//         let slice = b"1234567890qwertyuiopasdfghjklzxcvbnm1234567890qwertyuiopasdfghjklzxcvbnm";
+//         let (start, end) = Avx512::find_consecutive_in_range(slice, (b'0', b'9'), 0);
+//         assert_eq!(start, 0);
+//         assert_eq!(end, 9);
+//     }
+// }

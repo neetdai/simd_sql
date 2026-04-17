@@ -108,6 +108,11 @@ mod test {
         let (start, end) = Sse::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
         assert_eq!(end, 0);
+
+        let slice = b"b023q2w142e245rtyuiopasdfghjklzxcvbnm";
+        let (start, end) = Sse::find_consecutive_in_range(slice, (b'0', b'9'), 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 0);
     }
 
     #[test]

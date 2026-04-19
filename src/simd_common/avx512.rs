@@ -70,6 +70,10 @@ impl SimdTrait for Avx512 {
 
         (start_pos, end_pos)
     }
+
+    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, usize) {
+        todo!()
+    }
 }
 
 

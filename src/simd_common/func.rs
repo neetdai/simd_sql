@@ -46,11 +46,11 @@ fn find_consecutive_in_range_basic(slice: &[u8], matches: (u8, u8), start_pos: u
 fn find_consecutive_in_range_basic_x86(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, usize) {
     let mut end_pos = start_pos;
     let len = slice.len();
-    if is_x86_feature_detected!("avx2") && len >= Avx2::LENGTH {
+    if is_x86_feature_detected!("avx2") && len - end_pos >= Avx2::LENGTH {
         (_, end_pos) = Avx2::find_consecutive_in_range(slice, matches, end_pos);
     }
 
-    if is_x86_feature_detected!("sse2") && len >= Sse::LENGTH {
+    if is_x86_feature_detected!("sse2") && len - end_pos >= Sse::LENGTH {
         (_, end_pos) = Sse::find_consecutive_in_range(slice, matches, end_pos);
     }
 
@@ -76,15 +76,17 @@ fn longest_consecutive_matching_basic<const N: usize>(slice: &[u8], matches: [u8
 fn longest_consecutive_matching_basic_x86<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, usize) {
     let mut end_pos = start_pos;
     let len = slice.len();
-    if is_x86_feature_detected!("avx2") && len >= Avx2::LENGTH {
+    if is_x86_feature_detected!("avx2") && len - end_pos >= Avx2::LENGTH {
         (_, end_pos) = Avx2::longest_consecutive_matching(slice, matches, end_pos);
     }
 
-    if is_x86_feature_detected!("sse2") && len >= Sse::LENGTH {
+    if is_x86_feature_detected!("sse2") && len - end_pos >= Sse::LENGTH {
         (_, end_pos) = Sse::longest_consecutive_matching(slice, matches, end_pos);
     }
 
+    dbg!(&end_pos);
     (_, end_pos) = longest_consecutive_matching_basic(slice, matches, end_pos);
+    dbg!(&end_pos);
     (start_pos, end_pos)
 }
 
@@ -108,5 +110,12 @@ mod test {
         let (start, end) = longest_consecutive_matching_basic(slice, matches, 0);
         assert_eq!(start, 0);
         assert_eq!(end, 4);
+
+        let slice = b"                 
+                ";
+        let matches = [b' ', b'\t', b'\n', b'\r'];
+        let (start, end) = longest_consecutive_matching_basic(slice, matches, 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 33);
     }
 }

@@ -18,7 +18,7 @@ impl SimdTrait for Sse {
                 (lane_a, lane_b)
             };
 
-            while pos + Self::LENGTH < len {
+            while pos + Self::LENGTH <= len {
                 let ptr = slice.as_ptr().add(pos).cast();
                 let ptr = x86_64::_mm_loadu_si128(ptr);
 
@@ -56,7 +56,7 @@ impl SimdTrait for Sse {
                 x86_64::_mm_set1_epi8(m.cast_signed())
             });
 
-            while pos + Self::LENGTH < len {
+            while pos + Self::LENGTH <= len {
                 let ptr = slice.as_ptr().add(pos).cast();
                 let ptr = x86_64::_mm_loadu_si128(ptr);
 
@@ -70,7 +70,61 @@ impl SimdTrait for Sse {
                 if mask != (u16::MAX as i32) {
                     let trailing_ones = mask.trailing_ones();
                     pos += trailing_ones as usize;
-                    end_pos = pos - 1;
+                    break;
+                } else {
+                    pos += Self::LENGTH;
+                }
+            }
+        }
+
+        if start_pos == pos {
+            end_pos = pos;
+        } else {
+            end_pos = pos - 1;
+        }
+
+        (start_pos, end_pos)
+    }
+
+    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, usize) {
+        let mut end_pos = start_pos;
+        let mut pos = start_pos;
+        let len = slice.len();
+
+        unsafe {
+            let matches_range = match_range.map(|(a, b)| {
+                let lane_a = x86_64::_mm_set1_epi8(a.cast_signed() - 1);
+                let lane_b = x86_64::_mm_set1_epi8(b.cast_signed() + 1);
+                (lane_a, lane_b)
+            });
+
+            let match_lanes = matches2.map(|m| {
+                x86_64::_mm_set1_epi8(m.cast_signed())
+            });
+
+            while pos + Self::LENGTH <= len {
+                dbg!(&pos);
+                let ptr = slice.as_ptr().add(pos).cast();
+                let ptr = x86_64::_mm_loadu_si128(ptr);
+
+                let range_cmp = matches_range.iter().fold(x86_64::_mm_set1_epi8(-1), |prev, &(a_lane, b_lane)| {
+                    let cmp_a = x86_64::_mm_cmpgt_epi8(ptr, a_lane);
+                    let cmp_b = x86_64::_mm_cmpgt_epi8(b_lane, ptr);
+                    let cmp = x86_64::_mm_and_si128(cmp_a, cmp_b);
+                    x86_64::_mm_or_si128(prev, cmp)
+                });
+
+                let match_cmp = match_lanes.iter().fold(x86_64::_mm_set1_epi8(0), |prev, &lane| {
+                    let cmp = x86_64::_mm_cmpeq_epi8(ptr, lane);
+                    x86_64::_mm_or_si128(prev, cmp)
+                });
+
+                let cmp = x86_64::_mm_or_si128(range_cmp, match_cmp);
+                let mask = x86_64::_mm_movemask_epi8(cmp);
+
+                if mask != (u16::MAX as i32) {
+                    let trailing_ones = mask.trailing_ones();
+                    pos += trailing_ones as usize;
                     break;
                 } else {
                     pos += Self::LENGTH;
@@ -131,5 +185,13 @@ mod test {
         let (start, end) = Sse::longest_consecutive_matching(slice, [b'q', b'w', b'e'], 0);
         assert_eq!(start, 0);
         assert_eq!(end, 1);
+    }
+
+    #[test]
+    fn sse_test3() {
+        let slice = b"1234567890qwertyuiopasdfghjklzxcvbnmQWERTYUIOIPASDFGHJKLZXCVBNM_";
+        let (start, end) = Sse::mixed_match(slice, [(b'0', b'9'), (b'a', b'z'), (b'A', b'Z')], [b'_'], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 63);
     }
 }

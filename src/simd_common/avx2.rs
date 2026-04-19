@@ -82,6 +82,60 @@ impl SimdTrait for Avx2 {
 
         (start_pos, end_pos)
     }
+
+    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, usize) {
+        let mut end_pos = start_pos;
+        let mut pos = start_pos;
+        let len = slice.len();
+
+        unsafe {
+            let matches_range = match_range.map(|(a, b)| {
+                let a_lane = x86_64::_mm256_set1_epi8(a.cast_signed() - 1);
+                let b_lane = x86_64::_mm256_set1_epi8(b.cast_signed() + 1);
+                (a_lane, b_lane)
+            });
+
+            let match_lanes = matches2.map(|m| {
+                x86_64::_mm256_set1_epi8(m.cast_signed())
+            });
+
+            while pos + Self::LENGTH < len {
+                let ptr = slice.as_ptr().add(pos).cast();
+                let ptr = x86_64::_mm256_loadu_epi8(ptr);
+
+                let range_cmp = matches_range.iter().fold(x86_64::_mm256_set1_epi8(-1), |prev, &(a_lane, b_lane)| {
+                    let cmp_a = x86_64::_mm256_cmpgt_epi8(ptr, a_lane);
+                    let cmp_b = x86_64::_mm256_cmpgt_epi8(b_lane, ptr);
+                    let cmp = x86_64::_mm256_and_si256(cmp_a, cmp_b);
+                    x86_64::_mm256_or_si256(prev, cmp)
+                });
+
+                let match_cmp = match_lanes.iter().fold(x86_64::_mm256_set1_epi8(0), |prev, &lane| {
+                    let cmp = x86_64::_mm256_cmpeq_epi8(ptr, lane);
+                    x86_64::_mm256_or_si256(prev, cmp)
+                });
+
+                let cmp = x86_64::_mm256_or_si256(range_cmp, match_cmp);
+                let mask = x86_64::_mm256_movemask_epi8(cmp);
+
+                if mask != -1 {
+                    let trailing_ones = mask.trailing_ones();
+                    pos += trailing_ones as usize;
+                    break;
+                } else {
+                    pos += Self::LENGTH;
+                }
+            }
+        }
+
+        if start_pos == pos {
+            end_pos = pos;
+        } else {
+            end_pos = pos - 1;
+        }
+
+        (start_pos, end_pos)
+    }
 }
 
 mod test {
@@ -89,7 +143,7 @@ mod test {
 
 
     #[test]
-    fn av2_test1() {
+    fn avx2_test1() {
         let slice = b"1234567890qwertyuiopasdfghjklzxcvbnm";
         let (start, end) = Avx2::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
@@ -117,7 +171,7 @@ mod test {
     }
 
     #[test]
-    fn av2_test2() {
+    fn avx2_test2() {
         let slice = b"qwertyuiopasdfghjklzxcvbnm1234567890";
         let (start, end) = Avx2::longest_consecutive_matching(slice, [b'q', b'w', b'e'], 0);
         assert_eq!(start, 0);
@@ -132,5 +186,13 @@ mod test {
         let (start, end) = Avx2::longest_consecutive_matching(slice, [b'q', b'w', b'e'], 0);
         assert_eq!(start, 0);
         assert_eq!(end, 1);
+    }
+
+    #[test]
+    fn avx2_test3() {
+        let slice = b"qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM_";
+        let (start, end) = Avx2::mixed_match(slice, [(b'a', b'z'), (b'A', b'Z')], [b'_'], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 32);
     }
 }

@@ -1,10 +1,10 @@
 use std::{
     arch::x86_64::*,
     path::is_separator,
-    simd::{
-        Simd,
-        cmp::{SimdPartialEq, SimdPartialOrd},
-    },
+    // simd::{
+    //     Simd,
+    //     cmp::{SimdPartialEq, SimdPartialOrd},
+    // },
     str::FromStr,
 };
 
@@ -149,7 +149,13 @@ impl<'a> SimdLexer<'a> {
         //     pos += 1;
         // }
         let (_, end) = longest_consecutive_matching(self.inner, [b' ', b'\t', b'\n', b'\r'], self.position);
-        self.position = end;
+        self.position = {
+            if end == self.position {
+                self.position
+            } else {
+                end + 1
+            }
+        };
     }
 
     // #[inline]
@@ -220,66 +226,67 @@ impl<'a> SimdLexer<'a> {
         let mut pos = self.position;
         let length = self.inner.len();
 
-        if is_x86_feature_detected!("avx2") {
-            while pos + 32 < length {
-                let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos + 32]);
+        // if is_x86_feature_detected!("avx2") {
+        //     while pos + 32 < length {
+        //         let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos + 32]);
 
-                let digit_mask =
-                    slice.simd_ge(Simd::splat(b'0' - 1)) & slice.simd_le(Simd::splat(b'9' + 1));
-                let lower_mask =
-                    slice.simd_ge(Simd::splat(b'a' - 1)) & slice.simd_le(Simd::splat(b'z' + 1));
-                let upper_mask =
-                    slice.simd_ge(Simd::splat(b'A' - 1)) & slice.simd_le(Simd::splat(b'Z' + 1));
-                let underline_mask = slice.simd_eq(Simd::splat(b'_'));
+        //         let digit_mask =
+        //             slice.simd_ge(Simd::splat(b'0' - 1)) & slice.simd_le(Simd::splat(b'9' + 1));
+        //         let lower_mask =
+        //             slice.simd_ge(Simd::splat(b'a' - 1)) & slice.simd_le(Simd::splat(b'z' + 1));
+        //         let upper_mask =
+        //             slice.simd_ge(Simd::splat(b'A' - 1)) & slice.simd_le(Simd::splat(b'Z' + 1));
+        //         let underline_mask = slice.simd_eq(Simd::splat(b'_'));
 
-                let mask = digit_mask | lower_mask | upper_mask | underline_mask;
+        //         let mask = digit_mask | lower_mask | upper_mask | underline_mask;
 
-                if mask.all() {
-                    pos += 32;
-                } else {
-                    let result = mask.to_bitmask();
-                    let trailling_zeros = result.trailing_zeros();
-                    pos += trailling_zeros as usize;
-                    break;
-                }
-            }
-        }
+        //         if mask.all() {
+        //             pos += 32;
+        //         } else {
+        //             let result = mask.to_bitmask();
+        //             let trailling_zeros = result.trailing_zeros();
+        //             pos += trailling_zeros as usize;
+        //             break;
+        //         }
+        //     }
+        // }
 
-        if is_x86_feature_detected!("sse4.2") {
-            while pos + 16 < length {
-                let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
+        // if is_x86_feature_detected!("sse4.2") {
+        //     while pos + 16 < length {
+        //         let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
 
-                let digit_mask =
-                    slice.simd_ge(Simd::splat(b'0' - 1)) & slice.simd_le(Simd::splat(b'9' + 1));
-                let lower_mask =
-                    slice.simd_ge(Simd::splat(b'a' - 1)) & slice.simd_le(Simd::splat(b'z' + 1));
-                let upper_mask =
-                    slice.simd_ge(Simd::splat(b'A' - 1)) & slice.simd_le(Simd::splat(b'Z' + 1));
-                let underline_mask = slice.simd_eq(Simd::splat(b'_'));
+        //         let digit_mask =
+        //             slice.simd_ge(Simd::splat(b'0' - 1)) & slice.simd_le(Simd::splat(b'9' + 1));
+        //         let lower_mask =
+        //             slice.simd_ge(Simd::splat(b'a' - 1)) & slice.simd_le(Simd::splat(b'z' + 1));
+        //         let upper_mask =
+        //             slice.simd_ge(Simd::splat(b'A' - 1)) & slice.simd_le(Simd::splat(b'Z' + 1));
+        //         let underline_mask = slice.simd_eq(Simd::splat(b'_'));
 
-                let mask = digit_mask | lower_mask | upper_mask | underline_mask;
+        //         let mask = digit_mask | lower_mask | upper_mask | underline_mask;
 
-                if mask.all() {
-                    pos += 16;
-                } else {
-                    let result = mask.to_bitmask();
-                    let trailling_zeros = result.trailing_zeros();
-                    pos += trailling_zeros as usize;
-                    break;
-                }
-            }
-        }
+        //         if mask.all() {
+        //             pos += 16;
+        //         } else {
+        //             let result = mask.to_bitmask();
+        //             let trailling_zeros = result.trailing_zeros();
+        //             pos += trailling_zeros as usize;
+        //             break;
+        //         }
+        //     }
+        // }
 
-        let tmp_pos = pos;
-        for index in tmp_pos..length {
-            let c = &self.inner[index];
-            if (CHAR_TABLE[*c as usize] & C_ALP) != 0 {
-                pos = index;
-            } else {
-                break;
-            }
-        }
+        // let tmp_pos = pos;
+        // for index in tmp_pos..length {
+        //     let c = &self.inner[index];
+        //     if (CHAR_TABLE[*c as usize] & C_ALP) != 0 {
+        //         pos = index;
+        //     } else {
+        //         break;
+        //     }
+        // }
 
+        
         let end = pos;
         self.position = pos;
 
@@ -342,50 +349,50 @@ impl<'a> SimdLexer<'a> {
         let mut pos = self.position + 1;
         let length = self.inner.len();
 
-        if is_x86_feature_detected!("avx2") {
-            while pos + 32 < length {
-                let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos + 32]);
+        // if is_x86_feature_detected!("avx2") {
+        //     while pos + 32 < length {
+        //         let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos + 32]);
 
-                let target = Simd::from_array([terminator; 32]);
-                let mask = slice.simd_eq(target);
+        //         let target = Simd::from_array([terminator; 32]);
+        //         let mask = slice.simd_eq(target);
 
-                if mask.any() {
-                    let result = mask.to_bitmask();
-                    let index = result.trailing_zeros() as usize;
-                    let prev_value = self.inner[pos + index - 1];
-                    if prev_value != b'\\' {
-                        pos += index;
-                        break;
-                    } else {
-                        pos += index + 1;
-                    }
-                } else {
-                    pos += 32;
-                }
-            }
-        }
+        //         if mask.any() {
+        //             let result = mask.to_bitmask();
+        //             let index = result.trailing_zeros() as usize;
+        //             let prev_value = self.inner[pos + index - 1];
+        //             if prev_value != b'\\' {
+        //                 pos += index;
+        //                 break;
+        //             } else {
+        //                 pos += index + 1;
+        //             }
+        //         } else {
+        //             pos += 32;
+        //         }
+        //     }
+        // }
 
-        if is_x86_feature_detected!("sse4.2") {
-            while pos + 16 < length {
-                let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
-                let target = Simd::from_array([terminator; 16]);
-                let mask = slice.simd_eq(target);
+        // if is_x86_feature_detected!("sse4.2") {
+        //     while pos + 16 < length {
+        //         let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
+        //         let target = Simd::from_array([terminator; 16]);
+        //         let mask = slice.simd_eq(target);
 
-                if mask.any() {
-                    let result = mask.to_bitmask();
-                    let index = result.trailing_zeros() as usize;
-                    let prev_value = self.inner[pos + index - 1];
-                    if prev_value != b'\\' {
-                        pos += index;
-                        break;
-                    } else {
-                        pos += index + 1;
-                    }
-                } else {
-                    pos += 16;
-                }
-            }
-        }
+        //         if mask.any() {
+        //             let result = mask.to_bitmask();
+        //             let index = result.trailing_zeros() as usize;
+        //             let prev_value = self.inner[pos + index - 1];
+        //             if prev_value != b'\\' {
+        //                 pos += index;
+        //                 break;
+        //             } else {
+        //                 pos += index + 1;
+        //             }
+        //         } else {
+        //             pos += 16;
+        //         }
+        //     }
+        // }
 
         let tmp_pos = pos;
         for index in tmp_pos..length {

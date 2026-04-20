@@ -11,7 +11,7 @@ use std::{
 use minivec::MiniVec;
 
 use crate::{
-    error::ParserError, find_consecutive_in_range, keyword::{Keyword, KeywordMap}, longest_consecutive_matching, simd_common::{Avx2, SimdTrait}, token::{TokenKind, TokenTable}
+    error::ParserError, find_consecutive_in_range, keyword::{Keyword, KeywordMap}, longest_consecutive_matching, simd_common::{Avx2, SimdTrait, mixed_match}, token::{TokenKind, TokenTable}
 };
 
 // ============================================================================
@@ -149,11 +149,12 @@ impl<'a> SimdLexer<'a> {
         //     pos += 1;
         // }
         let (_, end) = longest_consecutive_matching(self.inner, [b' ', b'\t', b'\n', b'\r'], self.position);
+        dbg!(self.position, end);
         self.position = {
-            if end == self.position {
+            if end == -1 {
                 self.position
             } else {
-                end + 1
+                end.cast_unsigned() + 1
             }
         };
     }
@@ -215,9 +216,13 @@ impl<'a> SimdLexer<'a> {
         // self.position = pos;
         // let end = pos;
         let (start, end) = find_consecutive_in_range(&self.inner, (b'0', b'9'), self.position);
-        self.position = end;
+        self.position = if end == -1 {
+            start
+        } else {
+            end.cast_unsigned()
+        };
 
-        Ok((TokenKind::Number, start, end))
+        Ok((TokenKind::Number, start, self.position))
     }
 
     // #[inline]
@@ -286,9 +291,14 @@ impl<'a> SimdLexer<'a> {
         //     }
         // }
 
-        
-        let end = pos;
-        self.position = pos;
+        let (_, end) = mixed_match(self.inner, [(b'a', b'z'),(b'A', b'Z'),(b'0', b'9')], [b'_'], start);
+        dbg!(end);
+        self.position = if end == -1 {
+            start
+        } else {
+            end.cast_unsigned()
+        };
+        let end = self.position;
 
         let source = match self.inner.get(start..=end) {
             Some(s) => s,

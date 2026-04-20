@@ -6,8 +6,8 @@ pub(crate) struct Avx2;
 impl SimdTrait for Avx2 {
     const LENGTH: usize = 32;
 
-    fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, usize) {
-        let mut end_pos = start_pos;
+    fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, isize) {
+        let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
         unsafe {
@@ -35,16 +35,14 @@ impl SimdTrait for Avx2 {
                 }
             }
         }
-        if start_pos == pos {
-            end_pos = pos;
-        } else {
-            end_pos = pos - 1;
+        if start_pos < pos {
+            end_pos = (pos - 1).cast_signed();
         }
         (start_pos, end_pos)
     }
 
-    fn longest_consecutive_matching<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, usize) {
-        let mut end_pos = start_pos;
+    fn longest_consecutive_matching<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, isize) {
+        let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
         
@@ -74,17 +72,15 @@ impl SimdTrait for Avx2 {
             }
         }
 
-        if start_pos == pos {
-            end_pos = pos;
-        } else {
-            end_pos = pos - 1;
+        if start_pos < pos {
+            end_pos = (pos - 1).cast_signed();
         }
 
         (start_pos, end_pos)
     }
 
-    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, usize) {
-        let mut end_pos = start_pos;
+    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, isize) {
+        let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
 
@@ -128,10 +124,8 @@ impl SimdTrait for Avx2 {
             }
         }
 
-        if start_pos == pos {
-            end_pos = pos;
-        } else {
-            end_pos = pos - 1;
+        if start_pos < pos {
+            end_pos = (pos - 1).cast_signed();
         }
 
         (start_pos, end_pos)
@@ -162,12 +156,12 @@ mod test {
         let slice = b"bqwertyuiopasdfghjklzxcvbnm";
         let (start, end) = Avx2::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
-        assert_eq!(end, 0);
+        assert_eq!(end, -1);
 
         let slice = b"b023q2w142e245rtyuiopasdfghjklzxcvbnm";
         let (start, end) = Avx2::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
-        assert_eq!(end, 0);
+        assert_eq!(end, -1);
     }
 
     #[test]

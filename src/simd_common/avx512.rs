@@ -7,8 +7,8 @@ pub(crate) struct Avx512;
 impl SimdTrait for Avx512 {
     const LENGTH: usize =  64;
 
-    fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, usize) {
-        let mut end_pos = start_pos;
+    fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, isize) {
+        let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
         unsafe {
@@ -28,18 +28,21 @@ impl SimdTrait for Avx512 {
                 if mask != 0 {
                     let trailing_ones = mask.trailing_ones();
                     pos += trailing_ones as usize;
-                    end_pos = pos;
                     break;
                 } else {
                     pos += Self::LENGTH;
                 }
             }
         }
+
+        if start_pos < pos {
+            end_pos = (pos - 1).cast_signed();
+        }
         (start_pos, end_pos)
     }
 
-    fn longest_consecutive_matching<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, usize) {
-        let mut end_pos = start_pos;
+    fn longest_consecutive_matching<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, isize) {
+        let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
 
@@ -60,7 +63,6 @@ impl SimdTrait for Avx512 {
                 if mask != 0 {
                     let trailing_ones = mask.trailing_ones();
                     pos += trailing_ones as usize;
-                    end_pos = pos;
                     break;
                 } else {
                     pos += Self::LENGTH;
@@ -68,10 +70,13 @@ impl SimdTrait for Avx512 {
             }
         }
 
+        if start_pos < pos {
+            end_pos = (pos - 1).cast_signed();
+        }
         (start_pos, end_pos)
     }
 
-    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, usize) {
+    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, isize) {
         todo!()
     }
 }

@@ -6,8 +6,8 @@ pub(crate) struct Sse;
 impl SimdTrait for Sse {
     const LENGTH: usize = 16;
 
-    fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, usize) {
-        let mut end_pos = start_pos;
+    fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, isize) {
+        let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
 
@@ -37,17 +37,15 @@ impl SimdTrait for Sse {
             }
         }
 
-        if start_pos == pos {
-            end_pos = pos;
-        } else {
-            end_pos = pos - 1;
+        if start_pos < pos {
+            end_pos = (pos - 1).cast_signed();
         }
 
         (start_pos, end_pos)
     }
 
-    fn longest_consecutive_matching<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, usize) {
-        let mut end_pos = start_pos;
+    fn longest_consecutive_matching<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, isize) {
+        let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
 
@@ -77,17 +75,15 @@ impl SimdTrait for Sse {
             }
         }
 
-        if start_pos == pos {
-            end_pos = pos;
-        } else {
-            end_pos = pos - 1;
+        if start_pos < pos {
+            end_pos = (pos - 1).cast_signed();
         }
 
         (start_pos, end_pos)
     }
 
-    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, usize) {
-        let mut end_pos = start_pos;
+    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, isize) {
+        let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
 
@@ -107,7 +103,7 @@ impl SimdTrait for Sse {
                 let ptr = slice.as_ptr().add(pos).cast();
                 let ptr = x86_64::_mm_loadu_si128(ptr);
 
-                let range_cmp = matches_range.iter().fold(x86_64::_mm_set1_epi8(-1), |prev, &(a_lane, b_lane)| {
+                let range_cmp = matches_range.iter().fold(x86_64::_mm_set1_epi8(0), |prev, &(a_lane, b_lane)| {
                     let cmp_a = x86_64::_mm_cmpgt_epi8(ptr, a_lane);
                     let cmp_b = x86_64::_mm_cmpgt_epi8(b_lane, ptr);
                     let cmp = x86_64::_mm_and_si128(cmp_a, cmp_b);
@@ -121,6 +117,7 @@ impl SimdTrait for Sse {
 
                 let cmp = x86_64::_mm_or_si128(range_cmp, match_cmp);
                 let mask = x86_64::_mm_movemask_epi8(cmp);
+                dbg!(mask);
 
                 if mask != (u16::MAX as i32) {
                     let trailing_ones = mask.trailing_ones();
@@ -132,10 +129,8 @@ impl SimdTrait for Sse {
             }
         }
 
-        if start_pos == pos {
-            end_pos = pos;
-        } else {
-            end_pos = pos - 1;
+        if start_pos < pos {
+            end_pos = (pos - 1).cast_signed();
         }
 
         (start_pos, end_pos)

@@ -149,7 +149,6 @@ impl<'a> SimdLexer<'a> {
         //     pos += 1;
         // }
         let (_, end) = longest_consecutive_matching(self.inner, [b' ', b'\t', b'\n', b'\r'], self.position);
-        dbg!(self.position, end);
         self.position = {
             if end == -1 {
                 self.position
@@ -292,7 +291,7 @@ impl<'a> SimdLexer<'a> {
         // }
 
         let (_, end) = mixed_match(self.inner, [(b'a', b'z'),(b'A', b'Z'),(b'0', b'9')], [b'_'], start);
-        dbg!(end);
+        // dbg!(end);
         self.position = if end == -1 {
             start
         } else {

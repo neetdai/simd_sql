@@ -99,7 +99,7 @@ impl SimdTrait for Avx2 {
                 let ptr = slice.as_ptr().add(pos).cast();
                 let ptr = x86_64::_mm256_loadu_epi8(ptr);
 
-                let range_cmp = matches_range.iter().fold(x86_64::_mm256_set1_epi8(-1), |prev, &(a_lane, b_lane)| {
+                let range_cmp = matches_range.iter().fold(x86_64::_mm256_set1_epi8(0), |prev, &(a_lane, b_lane)| {
                     let cmp_a = x86_64::_mm256_cmpgt_epi8(ptr, a_lane);
                     let cmp_b = x86_64::_mm256_cmpgt_epi8(b_lane, ptr);
                     let cmp = x86_64::_mm256_and_si256(cmp_a, cmp_b);
@@ -113,6 +113,7 @@ impl SimdTrait for Avx2 {
 
                 let cmp = x86_64::_mm256_or_si256(range_cmp, match_cmp);
                 let mask = x86_64::_mm256_movemask_epi8(cmp);
+                // dbg!(&mask);
 
                 if mask != -1 {
                     let trailing_ones = mask.trailing_ones();
@@ -187,6 +188,11 @@ mod test {
         let slice = b"qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM_";
         let (start, end) = Avx2::mixed_match(slice, [(b'a', b'z'), (b'A', b'Z')], [b'_'], 0);
         assert_eq!(start, 0);
-        assert_eq!(end, 32);
+        assert_eq!(end, 31);
+
+        let slice = b"qweqwwe!@#$%^zxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM_";
+        let (start, end) = Avx2::mixed_match(slice, [(b'a', b'z'), (b'A', b'Z')], [b'_'], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 6);
     }
 }

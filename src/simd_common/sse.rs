@@ -99,7 +99,7 @@ impl SimdTrait for Sse {
             });
 
             while pos + Self::LENGTH <= len {
-                dbg!(&pos);
+                // dbg!(&pos);
                 let ptr = slice.as_ptr().add(pos).cast();
                 let ptr = x86_64::_mm_loadu_si128(ptr);
 
@@ -117,7 +117,7 @@ impl SimdTrait for Sse {
 
                 let cmp = x86_64::_mm_or_si128(range_cmp, match_cmp);
                 let mask = x86_64::_mm_movemask_epi8(cmp);
-                dbg!(mask);
+                // dbg!(mask);
 
                 if mask != (u16::MAX as i32) {
                     let trailing_ones = mask.trailing_ones();
@@ -156,12 +156,12 @@ mod test {
         let slice = b"bqwertyuiopasdfghjklzxcvbnm";
         let (start, end) = Sse::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
-        assert_eq!(end, 0);
+        assert_eq!(end, -1);
 
         let slice = b"b023q2w142e245rtyuiopasdfghjklzxcvbnm";
         let (start, end) = Sse::find_consecutive_in_range(slice, (b'0', b'9'), 0);
         assert_eq!(start, 0);
-        assert_eq!(end, 0);
+        assert_eq!(end, -1);
     }
 
     #[test]

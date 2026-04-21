@@ -1,6 +1,10 @@
-use super::{SimdTrait, Avx2, Sse};
+use super::{Avx2, SimdTrait, Sse};
 
-pub(crate) fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, isize) {
+pub(crate) fn find_consecutive_in_range(
+    slice: &[u8],
+    matches: (u8, u8),
+    start_pos: usize,
+) -> (usize, isize) {
     cfg_select! {
         target_arch = "x86" => {
             find_consecutive_in_range_basic_x86(slice, matches, start_pos)
@@ -14,7 +18,11 @@ pub(crate) fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_p
     }
 }
 
-pub(crate) fn longest_consecutive_matching<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, isize) {
+pub(crate) fn longest_consecutive_matching<const N: usize>(
+    slice: &[u8],
+    matches: [u8; N],
+    start_pos: usize,
+) -> (usize, isize) {
     cfg_select! {
         target_arch = "x86" => {
             longest_consecutive_matching_basic_x86(slice, matches, start_pos)
@@ -28,7 +36,12 @@ pub(crate) fn longest_consecutive_matching<const N: usize>(slice: &[u8], matches
     }
 }
 
-pub(crate) fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, isize) {
+pub(crate) fn mixed_match<const N1: usize, const N2: usize>(
+    slice: &[u8],
+    match_range: [(u8, u8); N1],
+    matches2: [u8; N2],
+    start_pos: usize,
+) -> (usize, isize) {
     cfg_select! {
         target_arch = "x86" => {
             mixed_match_x86(slice, match_range, matches2, start_pos)
@@ -42,7 +55,11 @@ pub(crate) fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_
     }
 }
 
-fn find_consecutive_in_range_basic(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, isize) {
+fn find_consecutive_in_range_basic(
+    slice: &[u8],
+    matches: (u8, u8),
+    start_pos: usize,
+) -> (usize, isize) {
     let len = slice.len();
     let mut end_pos = -1;
 
@@ -57,7 +74,11 @@ fn find_consecutive_in_range_basic(slice: &[u8], matches: (u8, u8), start_pos: u
     (start_pos, end_pos)
 }
 
-fn find_consecutive_in_range_basic_x86(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, isize) {
+fn find_consecutive_in_range_basic_x86(
+    slice: &[u8],
+    matches: (u8, u8),
+    start_pos: usize,
+) -> (usize, isize) {
     let mut end_pos = -1;
     let len = slice.len();
     if is_x86_feature_detected!("avx2") {
@@ -91,7 +112,11 @@ fn find_consecutive_in_range_basic_x86(slice: &[u8], matches: (u8, u8), start_po
     (start_pos, end_pos)
 }
 
-fn longest_consecutive_matching_basic<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, isize) {
+fn longest_consecutive_matching_basic<const N: usize>(
+    slice: &[u8],
+    matches: [u8; N],
+    start_pos: usize,
+) -> (usize, isize) {
     let len = slice.len();
     let mut end_pos = -1;
 
@@ -107,10 +132,14 @@ fn longest_consecutive_matching_basic<const N: usize>(slice: &[u8], matches: [u8
     (start_pos, end_pos)
 }
 
-fn longest_consecutive_matching_basic_x86<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, isize) {
+fn longest_consecutive_matching_basic_x86<const N: usize>(
+    slice: &[u8],
+    matches: [u8; N],
+    start_pos: usize,
+) -> (usize, isize) {
     let mut end_pos = -1;
     let len = slice.len();
-    if is_x86_feature_detected!("avx2")  {
+    if is_x86_feature_detected!("avx2") {
         let tmp_pos = if end_pos == -1 {
             start_pos
         } else {
@@ -121,7 +150,7 @@ fn longest_consecutive_matching_basic_x86<const N: usize>(slice: &[u8], matches:
         }
     }
 
-    if is_x86_feature_detected!("sse2")  {
+    if is_x86_feature_detected!("sse2") {
         let tmp_pos = if end_pos == -1 {
             start_pos
         } else {
@@ -141,7 +170,12 @@ fn longest_consecutive_matching_basic_x86<const N: usize>(slice: &[u8], matches:
     (start_pos, end_pos)
 }
 
-fn mixed_match_x86<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, isize) {
+fn mixed_match_x86<const N1: usize, const N2: usize>(
+    slice: &[u8],
+    match_range: [(u8, u8); N1],
+    matches2: [u8; N2],
+    start_pos: usize,
+) -> (usize, isize) {
     let mut end_pos = -1;
     let len = slice.len();
     if is_x86_feature_detected!("avx2") {
@@ -177,7 +211,12 @@ fn mixed_match_x86<const N1: usize, const N2: usize>(slice: &[u8], match_range: 
     (start_pos, end_pos)
 }
 
-fn mixed_match_basic<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, isize) {
+fn mixed_match_basic<const N1: usize, const N2: usize>(
+    slice: &[u8],
+    match_range: [(u8, u8); N1],
+    matches2: [u8; N2],
+    start_pos: usize,
+) -> (usize, isize) {
     let mut end_pos = -1;
     let len = slice.len();
     // dbg!(start_pos);
@@ -193,7 +232,6 @@ fn mixed_match_basic<const N1: usize, const N2: usize>(slice: &[u8], match_range
         }
     }
     (start_pos, end_pos)
-
 }
 
 mod test {
@@ -241,5 +279,4 @@ mod test {
         assert_eq!(start, 10);
         assert_eq!(end, 12);
     }
-
 }

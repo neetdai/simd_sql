@@ -5,9 +5,13 @@ use super::common::SimdTrait;
 pub(crate) struct Avx512;
 
 impl SimdTrait for Avx512 {
-    const LENGTH: usize =  64;
+    const LENGTH: usize = 64;
 
-    fn find_consecutive_in_range(slice: &[u8], matches: (u8, u8), start_pos: usize) -> (usize, isize) {
+    fn find_consecutive_in_range(
+        slice: &[u8],
+        matches: (u8, u8),
+        start_pos: usize,
+    ) -> (usize, isize) {
         let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
@@ -41,15 +45,17 @@ impl SimdTrait for Avx512 {
         (start_pos, end_pos)
     }
 
-    fn longest_consecutive_matching<const N: usize>(slice: &[u8], matches: [u8; N], start_pos: usize) -> (usize, isize) {
+    fn longest_consecutive_matching<const N: usize>(
+        slice: &[u8],
+        matches: [u8; N],
+        start_pos: usize,
+    ) -> (usize, isize) {
         let mut end_pos = -1;
         let mut pos = start_pos;
         let len = slice.len();
 
         unsafe {
-            let match_lanes = matches.map(|m| {
-                x86_64::_mm512_set1_epi8(m.cast_signed())
-            });
+            let match_lanes = matches.map(|m| x86_64::_mm512_set1_epi8(m.cast_signed()));
 
             while pos + Self::LENGTH < len {
                 let ptr = slice.as_ptr().add(pos).cast();
@@ -76,12 +82,15 @@ impl SimdTrait for Avx512 {
         (start_pos, end_pos)
     }
 
-    fn mixed_match<const N1: usize, const N2: usize>(slice: &[u8], match_range: [(u8, u8); N1], matches2: [u8; N2], start_pos: usize) -> (usize, isize) {
+    fn mixed_match<const N1: usize, const N2: usize>(
+        slice: &[u8],
+        match_range: [(u8, u8); N1],
+        matches2: [u8; N2],
+        start_pos: usize,
+    ) -> (usize, isize) {
         todo!()
     }
 }
-
-
 
 // mod test {
 //     use super::{SimdTrait, Avx512};

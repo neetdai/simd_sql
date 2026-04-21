@@ -15,11 +15,14 @@ pub enum Table {
 }
 
 impl Table {
-    pub(crate) fn class_name_with_single(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    pub(crate) fn class_name_with_single(
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         let expr = Expr::class_field(token_table, cursor)?;
         Ok(Self::Name(Alias {
             name: None,
-            value: expr
+            value: expr,
         }))
     }
 

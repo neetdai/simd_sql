@@ -11,7 +11,12 @@ use std::{
 use minivec::MiniVec;
 
 use crate::{
-    error::ParserError, find_consecutive_in_range, keyword::{Keyword, KeywordMap}, longest_consecutive_matching, simd_common::{Avx2, SimdTrait, mixed_match}, token::{TokenKind, TokenTable}
+    error::ParserError,
+    find_consecutive_in_range,
+    keyword::{Keyword, KeywordMap},
+    longest_consecutive_matching,
+    simd_common::{Avx2, SimdTrait, mixed_match},
+    token::{TokenKind, TokenTable},
 };
 
 // ============================================================================
@@ -148,7 +153,8 @@ impl<'a> SimdLexer<'a> {
         //     }
         //     pos += 1;
         // }
-        let (_, end) = longest_consecutive_matching(self.inner, [b' ', b'\t', b'\n', b'\r'], self.position);
+        let (_, end) =
+            longest_consecutive_matching(self.inner, [b' ', b'\t', b'\n', b'\r'], self.position);
         self.position = {
             if end == -1 {
                 self.position
@@ -290,7 +296,12 @@ impl<'a> SimdLexer<'a> {
         //     }
         // }
 
-        let (_, end) = mixed_match(self.inner, [(b'a', b'z'),(b'A', b'Z'),(b'0', b'9')], [b'_'], start);
+        let (_, end) = mixed_match(
+            self.inner,
+            [(b'a', b'z'), (b'A', b'Z'), (b'0', b'9')],
+            [b'_'],
+            start,
+        );
         // dbg!(end);
         self.position = if end == -1 {
             start
@@ -864,7 +875,8 @@ mod tests {
     #[test]
     fn test_sql2() {
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = SimdLexer::new("select * from a where b in (1,2,3) and c = 1", &keyword_map).unwrap();
+        let mut lexer =
+            SimdLexer::new("select * from a where b in (1,2,3) and c = 1", &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,

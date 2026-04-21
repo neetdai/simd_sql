@@ -1,11 +1,15 @@
 use minivec::MiniVec;
 
 use crate::{
-    ParserError, SelectStatement, ast::select::SubSelectStatement, common::{
+    ParserError, SelectStatement,
+    ast::select::SubSelectStatement,
+    common::{
         alias::Aliasable,
         pratt_parser::{Flow, PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
         utils::{expect_kind, maybe_kind},
-    }, keyword::Keyword, token::{TokenKind, TokenTable}
+    },
+    keyword::Keyword,
+    token::{TokenKind, TokenTable},
 };
 
 #[derive(Debug, PartialEq)]
@@ -61,7 +65,10 @@ impl PrecedenceTrait for BinaryOperator {
             BinaryOperator::Or => 1,
             BinaryOperator::And => 2,
             BinaryOperator::Equal | BinaryOperator::NotEqual => 3,
-            BinaryOperator::Not | BinaryOperator::Between | BinaryOperator::In | BinaryOperator::Like => 4,
+            BinaryOperator::Not
+            | BinaryOperator::Between
+            | BinaryOperator::In
+            | BinaryOperator::Like => 4,
             BinaryOperator::Less
             | BinaryOperator::LessEqual
             | BinaryOperator::Greater
@@ -292,11 +299,11 @@ impl PrattParserTrait for Expr {
                     Some(&TokenKind::Keyword(Keyword::Between)) => {
                         let between = Between::build(true, Box::new(left), token_table, cursor);
                         between.map(|e| (Expr::Between(e), Flow::Continue))
-                    },
+                    }
                     Some(&TokenKind::Keyword(Keyword::In)) => {
                         let in_expr = In::build(false, Box::new(left), token_table, cursor);
                         in_expr.map(|e| (Expr::In(e), Flow::Continue))
-                    },
+                    }
                     Some(&TokenKind::Keyword(Keyword::Like)) => {
                         let like = Like::build(true, Box::new(left), token_table, cursor);
                         like.map(|e| (Expr::Like(e), Flow::Continue))
@@ -695,12 +702,13 @@ impl In {
         expect_kind(token_table, cursor, &TokenKind::RightParen)?;
         *cursor += 1;
 
-        
-
-        Ok(Self { is_not, field, in_value })
+        Ok(Self {
+            is_not,
+            field,
+            in_value,
+        })
     }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub struct Like {
@@ -710,13 +718,22 @@ pub struct Like {
 }
 
 impl Like {
-    pub(crate) fn build(is_not: bool, field: Box<Expr>, token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    pub(crate) fn build(
+        is_not: bool,
+        field: Box<Expr>,
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Like))?;
         *cursor += 1;
 
         let pattern = Box::new(Expr::parse_primary(token_table, cursor)?);
 
-        Ok(Self { is_not, field, pattern })
+        Ok(Self {
+            is_not,
+            field,
+            pattern,
+        })
     }
 }
 
@@ -791,7 +808,8 @@ mod test {
         common::{
             alias::Alias,
             expr::{
-                Between, BinaryOp, BinaryOperator, Expr, Field, FunctionCall, In, InValue, NumbericLiteral, Star, StringLiteral
+                Between, BinaryOp, BinaryOperator, Expr, Field, FunctionCall, In, InValue,
+                NumbericLiteral, Star, StringLiteral,
             },
         },
         keyword::Keyword,

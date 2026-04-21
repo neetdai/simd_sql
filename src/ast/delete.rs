@@ -1,7 +1,9 @@
 use crate::{
     ParserError,
     common::{
-        expr::Expr, from::Table, utils::{expect_kind, maybe_kind}
+        expr::Expr,
+        from::Table,
+        utils::{expect_kind, maybe_kind},
     },
     keyword::Keyword,
     token::{TokenKind, TokenTable},

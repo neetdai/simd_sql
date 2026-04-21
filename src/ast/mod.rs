@@ -1,6 +1,6 @@
-pub mod insert;
-pub mod select;
-pub mod update;
-pub mod statement;
-pub mod query;
 pub mod delete;
+pub mod insert;
+pub mod query;
+pub mod select;
+pub mod statement;
+pub mod update;

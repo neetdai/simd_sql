@@ -1,7 +1,14 @@
 use minivec::MiniVec;
 
 use crate::{
-    ParserError, common::{expr::Expr, from::From, utils::{expect_kind, maybe_kind}}, keyword::Keyword, token::{TokenKind, TokenTable}
+    ParserError,
+    common::{
+        expr::Expr,
+        from::From,
+        utils::{expect_kind, maybe_kind},
+    },
+    keyword::Keyword,
+    token::{TokenKind, TokenTable},
 };
 
 #[derive(Debug, PartialEq)]
@@ -33,7 +40,7 @@ impl UpdateStatement {
                 }
                 Some(TokenKind::Keyword(_)) => {
                     break;
-                },
+                }
                 Some(_) => {
                     assignments.push(Expr::build(token_table, cursor)?);
                 }
@@ -41,12 +48,13 @@ impl UpdateStatement {
             }
         }
 
-        let where_statement = if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Where)) {
-            *cursor += 1;
-            Some(Expr::build(token_table, cursor)?)
-        } else {
-            None
-        };
+        let where_statement =
+            if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Where)) {
+                *cursor += 1;
+                Some(Expr::build(token_table, cursor)?)
+            } else {
+                None
+            };
 
         Ok(Self {
             table,

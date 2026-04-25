@@ -15,7 +15,7 @@ use crate::{
     find_consecutive_in_range,
     keyword::{Keyword, KeywordMap},
     longest_consecutive_matching,
-    simd_common::{Avx2, SimdTrait, mixed_match},
+    simd_common::{mixed_match},
     token::{TokenKind, TokenTable},
 };
 

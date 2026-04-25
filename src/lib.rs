@@ -1,6 +1,3 @@
-#![feature(portable_simd)]
-#![feature(allocator_api)]
-
 pub mod ast;
 pub mod common;
 mod error;

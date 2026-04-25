@@ -233,13 +233,11 @@ impl<'a> SimdLexer<'a> {
 
     fn scan_digit_number(&mut self) -> Result<(TokenKind, usize, usize), ParserError> {
         let start = self.position;
-        let (kind, _, end) = self.scan_unsigned_number()?;
-        if start == end {
-            return Err(ParserError::InvalidToken(self.position, self.position));
+        match self.scan_unsigned_number()? {
+            Some((kind, _, end)) => self.position = end,
+            None => return Err(ParserError::InvalidToken(start, start)),
         }
-
-        self.position = end;
-
+        
         let mut exists_dot = false;
         let mut exists_log = false;
 
@@ -250,8 +248,10 @@ impl<'a> SimdLexer<'a> {
                     match self.inner.get(next) {
                         Some(n) if CHAR_TABLE[*n as usize] & C_DIG != 0 => {
                             self.position = next;
-                            let (_, _, end) = self.scan_unsigned_number()?;
-                            self.position = end;
+                            match self.scan_unsigned_number()? {
+                                Some((kind, _, end)) => self.position = end,
+                                None => return Err(ParserError::InvalidToken(start, start)),
+                            }
                             exists_dot = true;
                         }
                         _ => return Err(ParserError::InvalidToken(self.position, self.position)),
@@ -265,8 +265,10 @@ impl<'a> SimdLexer<'a> {
                     match self.inner.get(next) {
                         Some(n) if CHAR_TABLE[*n as usize] & C_DIG != 0 => {
                             self.position = next;
-                            let (_, _, end) = self.scan_unsigned_number()?;
-                            self.position = end;
+                            match self.scan_unsigned_number()? {
+                                Some((kind, _, end)) => self.position = end,
+                                None => return Err(ParserError::InvalidToken(start, start)),
+                            }
                         }
                         _ => return Err(ParserError::InvalidToken(self.position, self.position)),
                     }
@@ -277,8 +279,10 @@ impl<'a> SimdLexer<'a> {
                     match self.inner.get(next) {
                         Some(n) if CHAR_TABLE[*n as usize] & C_DIG != 0 => {
                             self.position = next;
-                            let (_, _, end) = self.scan_unsigned_number()?;
-                            self.position = end;
+                            match self.scan_unsigned_number()? {
+                                Some((kind, _, end)) => self.position = end,
+                                None => return Err(ParserError::InvalidToken(start, start)),
+                            }
                             exists_log = true;
                         }
                         _ => return Err(ParserError::InvalidToken(self.position, self.position)),
@@ -290,18 +294,17 @@ impl<'a> SimdLexer<'a> {
         }
 
 
-        Ok((kind, start, self.position))
+        Ok((TokenKind::Number, start, self.position))
     }
 
-    fn scan_unsigned_number(&mut self) -> Result<(TokenKind, usize, usize), ParserError> {
+    fn scan_unsigned_number(&mut self) -> Result<Option<(TokenKind, usize, usize)>, ParserError> {
         let (start, end) = find_consecutive_in_range(&self.inner, (b'0', b'9'), self.position);
-        self.position = if end == -1 {
-            start
+        if end == -1 {
+            Ok(None)
         } else {
-            end.cast_unsigned()
-        };
-
-        Ok((TokenKind::Number, start, self.position))
+            self.position = end.cast_unsigned();
+            Ok(Some((TokenKind::Number, start, self.position)))
+        }
     }
 
     // #[inline]
@@ -748,6 +751,21 @@ mod tests {
                 positions: vec![],
             }
         );
+
+        let keyword_map = KeywordMap::new().unwrap();
+        let mut lexer = SimdLexer::new(
+            r#""#,
+            &keyword_map,
+        )
+        .unwrap();
+        let tokens = lexer.tokenize().unwrap();
+        assert_eq!(
+            tokens,
+            TokenTable {
+                tokens: vec![],
+                positions: vec![],
+            }
+        );
     }
 
     #[test]
@@ -826,6 +844,16 @@ mod tests {
                 positions: vec![(0, 14)],
             }
         );
+
+        let mut lexer = SimdLexer::new("1", &keyword_map).unwrap();
+        let token = lexer.tokenize().unwrap();
+        assert_eq!(
+            token,
+            TokenTable {
+                tokens: vec![TokenKind::Number],
+                positions: vec![(0, 0)],
+            }
+        );
     }
 
     #[test]
@@ -872,6 +900,17 @@ mod tests {
 
     #[test]
     fn test_match_string() {
+        let keyword_map = KeywordMap::new().unwrap();
+        let mut lexer = SimdLexer::new("''", &keyword_map).unwrap();
+        let token = lexer.tokenize().unwrap();
+        assert_eq!(
+            token,
+            TokenTable {
+                tokens: vec![TokenKind::StringLiteral],
+                positions: vec![(0, 1)],
+            }
+        );
+
         let keyword_map = KeywordMap::new().unwrap();
         let mut lexer = SimdLexer::new("'helloWorld'", &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();

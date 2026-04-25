@@ -1,4 +1,3 @@
-use std::alloc::Allocator;
 
 use minivec::MiniVec;
 

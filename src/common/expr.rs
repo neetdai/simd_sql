@@ -471,6 +471,7 @@ impl FromToken for Star {
 pub struct FunctionCall {
     name: usize,
     args: MiniVec<Expr>,
+    distinct: bool,
 }
 
 impl FromToken for FunctionCall {
@@ -478,6 +479,12 @@ impl FromToken for FunctionCall {
     where
         Self: Sized,
     {
+        let distinct = if let Some(TokenKind::Keyword(Keyword::Distinct)) = token_table.get_kind(*cursor) {
+            *cursor += 1;
+            true
+        } else {
+            false
+        };
         let first = token_table
             .get_kind(*cursor)
             .map(|kind| kind == &TokenKind::Identifier)
@@ -524,6 +531,7 @@ impl FromToken for FunctionCall {
         Ok(Self {
             name: name_pos,
             args,
+            distinct,
         })
 
         // if let Some((TokenKind::Identifier, (start, end))) = token_table.get_entry(*cursor) {
@@ -889,6 +897,7 @@ mod test {
         assert_eq!(
             expr,
             Expr::FunctionCall(FunctionCall {
+                distinct: false,
                 name: 0,
                 args: mini_vec![Expr::StringLiteral(StringLiteral { value: 2 })]
             })
@@ -915,7 +924,8 @@ mod test {
                 args: mini_vec![
                     Expr::StringLiteral(StringLiteral { value: 2 }),
                     Expr::StringLiteral(StringLiteral { value: 4 })
-                ]
+                ],
+                distinct: false,
             })
         );
         assert_eq!(cursor, 6);
@@ -1294,6 +1304,7 @@ mod test {
         assert_eq!(
             expr,
             Expr::FunctionCall(FunctionCall {
+                distinct: false,
                 name: 0,
                 args: mini_vec![
                     Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
@@ -1307,6 +1318,27 @@ mod test {
             })
         );
         assert_eq!(cursor, 10);
+    }
+
+    #[test]
+    fn test_function_distinct() {
+        let mut token_table = TokenTable::with_capacity(6);
+        token_table.push(TokenKind::Keyword(Keyword::Distinct), 0, 7);
+        token_table.push(TokenKind::Identifier, 8, 11);
+        token_table.push(TokenKind::LeftParen, 12, 12);
+        token_table.push(TokenKind::Number, 13, 14);
+        token_table.push(TokenKind::RightParen, 15, 15);
+
+         let mut cursor = 0;
+        let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
+        assert_eq!(
+            expr,
+            Expr::FunctionCall(FunctionCall {
+                distinct: true,
+                name: 1,
+                args: mini_vec![Expr::NumbericLiteral(NumbericLiteral { value: 3 })]
+            })
+        );
     }
 
     #[test]
@@ -1481,6 +1513,7 @@ mod test {
             Alias {
                 name: Some(4),
                 value: Expr::FunctionCall(FunctionCall {
+                    distinct: false,
                     name: 0,
                     args: mini_vec![Expr::NumbericLiteral(NumbericLiteral { value: 2 })],
                 }),
@@ -1508,6 +1541,7 @@ mod test {
         assert_eq!(
             expr,
             Expr::FunctionCall(FunctionCall {
+                distinct: false,
                 name: 0,
                 args: mini_vec![
                     Expr::BinaryOp(Box::new(BinaryOp {

@@ -479,12 +479,7 @@ impl FromToken for FunctionCall {
     where
         Self: Sized,
     {
-        let distinct = if let Some(TokenKind::Keyword(Keyword::Distinct)) = token_table.get_kind(*cursor) {
-            *cursor += 1;
-            true
-        } else {
-            false
-        };
+        
         let first = token_table
             .get_kind(*cursor)
             .map(|kind| kind == &TokenKind::Identifier)
@@ -500,6 +495,13 @@ impl FromToken for FunctionCall {
 
         let name_pos = *cursor;
         *cursor += 2;
+
+        let distinct = if let Some(TokenKind::Keyword(Keyword::Distinct)) = token_table.get_kind(*cursor) {
+            *cursor += 1;
+            true
+        } else {
+            false
+        };
 
         let mut args = MiniVec::with_capacity(8);
         let mut is_comma = false;
@@ -1323,11 +1325,11 @@ mod test {
     #[test]
     fn test_function_distinct() {
         let mut token_table = TokenTable::with_capacity(6);
-        token_table.push(TokenKind::Keyword(Keyword::Distinct), 0, 7);
-        token_table.push(TokenKind::Identifier, 8, 11);
-        token_table.push(TokenKind::LeftParen, 12, 12);
-        token_table.push(TokenKind::Number, 13, 14);
-        token_table.push(TokenKind::RightParen, 15, 15);
+        token_table.push(TokenKind::Identifier, 0, 0);
+        token_table.push(TokenKind::LeftParen, 1, 1);
+        token_table.push(TokenKind::Keyword(Keyword::Distinct), 2, 2);
+        token_table.push(TokenKind::Number, 3, 4);
+        token_table.push(TokenKind::RightParen, 5, 5);
 
          let mut cursor = 0;
         let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
@@ -1335,7 +1337,7 @@ mod test {
             expr,
             Expr::FunctionCall(FunctionCall {
                 distinct: true,
-                name: 1,
+                name: 0,
                 args: mini_vec![Expr::NumbericLiteral(NumbericLiteral { value: 3 })]
             })
         );

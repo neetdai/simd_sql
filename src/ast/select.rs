@@ -1,4 +1,3 @@
-
 use minivec::MiniVec;
 
 use crate::{
@@ -18,6 +17,7 @@ use crate::{
 
 #[derive(Debug, PartialEq)]
 pub struct SelectStatement {
+    pub distinct: bool,
     pub columns: Vec<Alias<Expr>>,
     pub from: Option<MiniVec<From>>,
     pub where_statement: Option<Expr>,
@@ -38,6 +38,13 @@ impl SelectStatement {
     fn build_ast(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Select))?;
         *cursor += 1;
+
+        let distinct = if let Some(TokenKind::Keyword(Keyword::Distinct)) = token_table.get_kind(*cursor) {
+            *cursor += 1;
+            true
+        } else {
+            false
+        };
 
         let mut columns = Vec::new();
         loop {
@@ -121,6 +128,7 @@ impl SelectStatement {
             having_statement,
             order_by,
             limit,
+            distinct,
         })
     }
 }

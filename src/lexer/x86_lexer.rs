@@ -15,7 +15,7 @@ use crate::{
     find_consecutive_in_range,
     keyword::{Keyword, KeywordMap},
     longest_consecutive_matching,
-    simd_common::{mixed_match},
+    simd_common::mixed_match,
     token::{TokenKind, TokenTable},
 };
 
@@ -237,13 +237,13 @@ impl<'a> SimdLexer<'a> {
             Some((kind, _, end)) => self.position = end,
             None => return Err(ParserError::InvalidToken(start, start)),
         }
-        
+
         let mut exists_dot = false;
         let mut exists_log = false;
 
         loop {
             match self.inner.get(self.position + 1) {
-                Some(b'.') if exists_dot == false => {
+                Some(b'.') if !exists_dot => {
                     let next = self.position + 2;
                     match self.inner.get(next) {
                         Some(n) if CHAR_TABLE[*n as usize] & C_DIG != 0 => {
@@ -273,7 +273,7 @@ impl<'a> SimdLexer<'a> {
                         _ => return Err(ParserError::InvalidToken(self.position, self.position)),
                     }
                 }
-                Some(b'E') | Some(b'e') if exists_log == false => {
+                Some(b'E') | Some(b'e') if !exists_log => {
                     let next = self.position + 2;
 
                     match self.inner.get(next) {
@@ -288,11 +288,12 @@ impl<'a> SimdLexer<'a> {
                         _ => return Err(ParserError::InvalidToken(self.position, self.position)),
                     }
                 }
-                Some(b'E') | Some(b'e') if exists_log => return Err(ParserError::InvalidToken(self.position, self.position)),
+                Some(b'E') | Some(b'e') if exists_log => {
+                    return Err(ParserError::InvalidToken(self.position, self.position));
+                }
                 _ => break,
             }
         }
-
 
         Ok((TokenKind::Number, start, self.position))
     }
@@ -753,11 +754,7 @@ mod tests {
         );
 
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = SimdLexer::new(
-            r#""#,
-            &keyword_map,
-        )
-        .unwrap();
+        let mut lexer = SimdLexer::new(r#""#, &keyword_map).unwrap();
         let tokens = lexer.tokenize().unwrap();
         assert_eq!(
             tokens,

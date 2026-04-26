@@ -1,8 +1,8 @@
 use crate::{
-    SelectStatement, Statement,
+    Statement,
     error::ParserError,
     keyword::KeywordMap,
-    lexer::{Lexer, SimdLexer},
+    lexer::Lexer,
 };
 use bumpalo::Bump;
 use simdutf8::basic::from_utf8;
@@ -22,16 +22,11 @@ impl Parser {
         })
     }
 
-    pub fn parse(&self, text: &str) -> Result<(), ParserError> {
+    pub fn parse(&self, text: &str) -> Result<Statement, ParserError> {
         let text = from_utf8(text.as_bytes())?;
         let tokentable = {
-            if is_x86_feature_detected!("avx2") {
-                let mut lexer = SimdLexer::new(text, &self.keyword_map)?;
-                lexer.tokenize()?
-            } else {
-                let mut lexer = Lexer::new(text, &self.keyword_map)?;
-                lexer.tokenize()?
-            }
+            let mut lexer = Lexer::new(text, &self.keyword_map)?;
+            lexer.tokenize()?
         };
         let mut cursor = 0;
         // let select = SelectStatement::new(&tokentable, &mut cursor)?;
@@ -39,6 +34,6 @@ impl Parser {
         // dbg!(&select);
         // dbg!(&statement);
         // dbg!(&select.where_statement);
-        Ok(())
+        Ok(statement)
     }
 }

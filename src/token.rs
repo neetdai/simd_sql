@@ -26,6 +26,9 @@ pub(crate) enum TokenKind {
     Multiply,
     Divide,
     Mod,
+    Xor,
+    And,
+    Or,
     Keyword(Keyword),
 }
 
@@ -53,6 +56,9 @@ impl Display for TokenKind {
             TokenKind::Multiply => write!(f, "Multiply"),
             TokenKind::Divide => write!(f, "Divide"),
             TokenKind::Mod => write!(f, "Mod"),
+            TokenKind::Xor => write!(f, "Xor"),
+            TokenKind::And => write!(f, "And"),
+            TokenKind::Or => write!(f, "Or"),
             TokenKind::Keyword(kw) => kw.fmt(f),
         }
     }

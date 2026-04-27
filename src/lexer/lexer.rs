@@ -32,7 +32,7 @@ const C_QUO: u8 = 1 << 3; // 引号 (' " `)
 const C_SYM: u8 = 1 << 4; // 符号 (+ - * / etc)
 
 // 256字节的映射表，将 byte 映射到分类
-static CHAR_TABLE: [u8; 256] = {
+const fn char_table() -> [u8; 256] {
     let mut t = [C_UNK; 256];
 
     // 设置空白
@@ -66,14 +66,16 @@ static CHAR_TABLE: [u8; 256] = {
     t[b'"' as usize] = C_QUO;
 
     // 设置符号
-    let syms = b"+-*/%()<>=,;.\\";
+    let syms = b"+-*/%()<>=,;.\\!&|^~";
     let mut j = 0;
     while j < syms.len() {
         t[syms[j] as usize] = C_SYM;
         j += 1;
     }
     t
-};
+}
+
+const CHAR_TABLE: [u8; 256] = char_table();
 
 #[derive(Debug)]
 pub(crate) struct Lexer<'a> {
@@ -333,6 +335,9 @@ impl<'a> Lexer<'a> {
                     }
                 }
                 Some(b'E') | Some(b'e') if exists_log => {
+                    return Err(ParserError::InvalidToken(self.position, self.position));
+                }
+                Some(n) if CHAR_TABLE[*n as usize] & C_ALP != 0 => {
                     return Err(ParserError::InvalidToken(self.position, self.position));
                 }
                 _ => break,
@@ -631,6 +636,27 @@ impl<'a> Lexer<'a> {
             Some(b';') => {
                 table.push(TokenKind::Eof, start, end);
                 self.position += 1;
+            }
+            Some(b'&') => {
+                table.push(TokenKind::And, start, end);
+                self.position += 1;
+            }
+            Some(b'|') => {
+                table.push(TokenKind::Or, start, end);
+                self.position += 1;
+            }
+            Some(b'^') => {
+                table.push(TokenKind::Xor, start, end);
+                self.position += 1;
+            }
+            Some(b'!') => match self.inner.get(self.position + 1) {
+                Some(b'=') => {
+                    table.push(TokenKind::NotEqual, self.position, self.position + 1);
+                    self.position += 2;
+                }
+                _ => {
+                    return Err(ParserError::InvalidToken(start, end));
+                }
             }
             _ => return Err(ParserError::InvalidToken(start, end)),
         };

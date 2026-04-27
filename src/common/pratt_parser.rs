@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     ParserError,
-    token::{TokenKind, TokenTable},
+    token::TokenTable,
 };
 
 pub(crate) trait PrattOutput<I>
@@ -34,8 +34,8 @@ pub(crate) trait PrattParserTrait {
     fn match_item(token_table: &TokenTable, cursor: &mut usize) -> Option<Self::Item>;
 
     fn parse_postfix(
-        left: Self::Output,
-        token_table: &TokenTable,
+        _left: Self::Output,
+        _token_table: &TokenTable,
         cursor: &mut usize,
     ) -> Result<(Self::Output, Flow), ParserError> {
         Err(ParserError::SyntaxError(*cursor, *cursor))

@@ -1,8 +1,6 @@
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError, MatchKind};
-use std::collections::BTreeMap;
-use strum::{Display, VariantArray, VariantNames};
+use strum::{Display, VariantArray};
 
-use minivec::{MiniVec, mini_vec};
 
 #[derive(
     Debug, PartialEq, Eq, Hash, Clone, Copy, Display, strum::VariantArray, strum::AsRefStr,

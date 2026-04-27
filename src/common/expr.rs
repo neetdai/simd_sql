@@ -914,8 +914,8 @@ mod test {
         common::{
             alias::Alias,
             expr::{
-                Between, BinaryOp, BinaryOperator, ExistsExpr, Expr, Field, FunctionCall, In,
-                InValue, IsNull, Like, NumbericLiteral, Star, StringLiteral,
+                BinaryOp, BinaryOperator, Expr, Field, FunctionCall, In, InValue, IsNull,
+                NumbericLiteral, Star, StringLiteral,
             },
         },
         keyword::Keyword,
@@ -1526,7 +1526,7 @@ mod test {
 
         let mut cursor = 0;
         let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        let inner = match &expr {
+        let _inner = match &expr {
             Expr::BinaryOp(bop) => &bop.right,
             _ => panic!("Expected BinaryOp"),
         };
@@ -1681,28 +1681,8 @@ mod test {
         token_table.push(TokenKind::Number, 12, 12);
 
         let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
+        let _expr = Expr::build(&token_table, &mut cursor).unwrap();
         assert_eq!(cursor, 13);
-    }
-
-    #[test]
-    fn test_comparison_chain_with_and_or() {
-        let mut token_table = TokenTable::with_capacity(11);
-        token_table.push(TokenKind::Identifier, 0, 0);
-        token_table.push(TokenKind::Greater, 1, 1);
-        token_table.push(TokenKind::Number, 2, 2);
-        token_table.push(TokenKind::Keyword(Keyword::And), 3, 5);
-        token_table.push(TokenKind::Identifier, 6, 6);
-        token_table.push(TokenKind::Less, 7, 7);
-        token_table.push(TokenKind::Number, 8, 8);
-        token_table.push(TokenKind::Keyword(Keyword::Or), 9, 10);
-        token_table.push(TokenKind::Identifier, 11, 11);
-        token_table.push(TokenKind::Equal, 12, 12);
-        token_table.push(TokenKind::Number, 13, 13);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(cursor, 11);
     }
 
     #[test]

@@ -153,8 +153,10 @@ impl SimdTrait for Sse {
     }
 }
 
+#[cfg(test)]
 mod test {
-    use crate::simd_common::{SimdTrait, Sse};
+    use super::Sse;
+    use crate::simd_common::common::SimdTrait;
 
     #[test]
     fn sse_test1() {

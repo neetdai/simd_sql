@@ -1,9 +1,7 @@
-use minivec::MiniVec;
 
-use super::{insert::InsertStatement, select::SelectStatement, update::UpdateStatement};
+use super::{insert::InsertStatement, update::UpdateStatement};
 use crate::{
     ast::{delete::DeleteStatement, query::Query},
-    common::utils::maybe_kind,
     error::ParserError,
     keyword::Keyword,
     token::{TokenKind, TokenTable},

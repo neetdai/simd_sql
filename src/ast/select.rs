@@ -74,7 +74,9 @@ impl SelectStatement {
                     Some(TokenKind::Comma) => {
                         *cursor += 1;
                     }
-                    Some(TokenKind::Keyword(_)) | Some(TokenKind::Eof) => break,
+                    Some(TokenKind::RightParen)
+                    | Some(TokenKind::Keyword(_))
+                    | Some(TokenKind::Eof) => break,
                     Some(_) => {
                         list.push(From::parse(token_table, cursor)?);
                     }

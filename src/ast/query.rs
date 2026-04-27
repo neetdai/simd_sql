@@ -2,15 +2,13 @@ use crate::error::ParserError;
 use crate::{
     SelectStatement,
     common::{
-        expr::Expr,
-        group::Group,
         limit::Limit,
         order::Order,
         pratt_parser::{Flow, PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
         utils::maybe_kind,
     },
     keyword::Keyword,
-    token::{self, TokenKind, TokenTable},
+    token::{TokenKind, TokenTable},
 };
 
 #[derive(Debug, PartialEq)]
@@ -57,9 +55,9 @@ impl Query {
         let mut query = PrattParser::parse_expression::<Self>(token_table, cursor)?;
 
         if let Self::SetOperation {
-            op,
-            left,
-            right,
+            op: _,
+            left: _,
+            right: _,
             order_by,
             limit,
         } = &mut query
@@ -122,8 +120,8 @@ impl PrattParserTrait for Query {
 
     fn parse_postfix(
         left: Self::Output,
-        token_table: &TokenTable,
-        cursor: &mut usize,
+        _token_table: &TokenTable,
+        _cursor: &mut usize,
     ) -> Result<(Self::Output, Flow), ParserError> {
         Ok((left, Flow::Run))
     }

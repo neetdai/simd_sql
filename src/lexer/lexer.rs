@@ -1,14 +1,4 @@
-use std::{
-    arch::x86_64::*,
-    path::is_separator,
-    // simd::{
-    //     Simd,
-    //     cmp::{SimdPartialEq, SimdPartialOrd},
-    // },
-    str::FromStr,
-};
 
-use minivec::MiniVec;
 
 use crate::{
     error::ParserError,
@@ -236,7 +226,7 @@ impl<'a> Lexer<'a> {
     fn scan_digit_number(&mut self) -> Result<(TokenKind, usize, usize), ParserError> {
         let start = self.position;
         match self.scan_unsigned_number()? {
-            Some((kind, _, end)) => self.position = end,
+            Some((_kind, _, end)) => self.position = end,
             None => return Err(ParserError::InvalidToken(start, start)),
         }
 
@@ -295,7 +285,7 @@ impl<'a> Lexer<'a> {
                         Some(n) if CHAR_TABLE[*n as usize] & C_DIG != 0 => {
                             self.position = next;
                             match self.scan_unsigned_number()? {
-                                Some((kind, _, end)) => self.position = end,
+                                Some((_kind, _, end)) => self.position = end,
                                 None => return Err(ParserError::InvalidToken(start, start)),
                             }
                             exists_dot = true;
@@ -312,7 +302,7 @@ impl<'a> Lexer<'a> {
                         Some(n) if CHAR_TABLE[*n as usize] & C_DIG != 0 => {
                             self.position = next;
                             match self.scan_unsigned_number()? {
-                                Some((kind, _, end)) => self.position = end,
+                                Some((_kind, _, end)) => self.position = end,
                                 None => return Err(ParserError::InvalidToken(start, start)),
                             }
                         }
@@ -326,7 +316,7 @@ impl<'a> Lexer<'a> {
                         Some(n) if CHAR_TABLE[*n as usize] & C_DIG != 0 => {
                             self.position = next;
                             match self.scan_unsigned_number()? {
-                                Some((kind, _, end)) => self.position = end,
+                                Some((_kind, _, end)) => self.position = end,
                                 None => return Err(ParserError::InvalidToken(start, start)),
                             }
                             exists_log = true;
@@ -360,8 +350,8 @@ impl<'a> Lexer<'a> {
     // #[inline]
     fn scan_identify(&mut self) -> Result<(TokenKind, usize, usize), ParserError> {
         let start = self.position;
-        let mut pos = self.position;
-        let length = self.inner.len();
+        let _pos = self.position;
+        let _length = self.inner.len();
 
         // if is_x86_feature_detected!("avx2") {
         //     while pos + 32 < length {
@@ -541,14 +531,20 @@ impl<'a> Lexer<'a> {
         //     }
         // }
 
+        let mut found_terminator = false;
         let tmp_pos = pos;
         for index in tmp_pos..length {
             let c = &self.inner[index];
             let prev_c = &self.inner[index - 1];
             if *c == terminator && *prev_c != b'\\' {
+                found_terminator = true;
                 break;
             }
             pos += 1;
+        }
+
+        if !found_terminator {
+            return Err(ParserError::InvalidToken(start, self.position));
         }
 
         let end = pos;

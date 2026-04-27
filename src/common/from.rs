@@ -1,7 +1,6 @@
-use minivec::MiniVec;
 
 use crate::{
-    ParserError, SelectStatement,
+    ParserError,
     ast::select::SubSelectStatement,
     common::{alias::Alias, expr::Expr, utils::expect_kind},
     keyword::Keyword,
@@ -198,7 +197,6 @@ impl From {
 mod tests {
     use super::*;
     use crate::common::expr::{BinaryOp, BinaryOperator, Field};
-    use minivec::mini_vec;
 
     fn tokenize(tokens: Vec<(TokenKind, usize, usize)>) -> TokenTable {
         let mut table = TokenTable::new();

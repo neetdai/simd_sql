@@ -71,6 +71,9 @@ fn find_consecutive_in_range_basic_sse(
     matches: (u8, u8),
     start_pos: usize,
 ) -> (usize, isize) {
+    if start_pos >= slice.len() {
+        return (start_pos, -1);
+    }
     let mut end_pos = -1;
     let len = slice.len();
 
@@ -79,7 +82,7 @@ fn find_consecutive_in_range_basic_sse(
     } else {
         end_pos as usize
     };
-    if len - tmp_pos >= Sse::LENGTH {
+    if len >= tmp_pos + Sse::LENGTH {
         (_, end_pos) = Sse::find_consecutive_in_range(slice, matches, tmp_pos);
     }
 
@@ -118,6 +121,9 @@ fn longest_consecutive_matching_basic_sse<const N: usize>(
     matches: [u8; N],
     start_pos: usize,
 ) -> (usize, isize) {
+    if start_pos >= slice.len() {
+        return (start_pos, -1);
+    }
     let mut end_pos = -1;
     let len = slice.len();
 
@@ -126,7 +132,7 @@ fn longest_consecutive_matching_basic_sse<const N: usize>(
     } else {
         end_pos as usize
     };
-    if len - tmp_pos >= Sse::LENGTH {
+    if len >= tmp_pos + Sse::LENGTH {
         (_, end_pos) = Sse::longest_consecutive_matching(slice, matches, tmp_pos);
     }
 
@@ -146,6 +152,9 @@ fn mixed_match_sse<const N1: usize, const N2: usize>(
     matches2: [u8; N2],
     start_pos: usize,
 ) -> (usize, isize) {
+    if start_pos >= slice.len() {
+        return (start_pos, -1);
+    }
     let mut end_pos = -1;
     let len = slice.len();
 
@@ -155,11 +164,10 @@ fn mixed_match_sse<const N1: usize, const N2: usize>(
         } else {
             end_pos as usize
         };
-        if len - tmp_pos >= Sse::LENGTH {
+        if len >= tmp_pos + Sse::LENGTH {
             (_, end_pos) = Sse::mixed_match(slice, match_range, matches2, tmp_pos);
         }
     }
-    // dbg!(end_pos);
 
     let tmp_pos = if end_pos == -1 {
         start_pos
@@ -193,8 +201,11 @@ fn mixed_match_basic<const N1: usize, const N2: usize>(
     (start_pos, end_pos)
 }
 
+#[cfg(test)]
 mod test {
-    use crate::simd_common::func::{longest_consecutive_matching_basic, mixed_match_basic, find_consecutive_in_range_basic};
+    use super::{
+        find_consecutive_in_range_basic, longest_consecutive_matching_basic, mixed_match_basic,
+    };
 
     #[test]
     fn test_find_consecutive_in_range_basic() {

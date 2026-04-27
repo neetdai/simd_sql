@@ -1,0 +1,451 @@
+// Integration tests to exercise the high-level Parser API and SQL AST construction
+// These tests target correctness-first improvements by validating that
+// typical SQL snippets are parsed without errors.
+
+use simd_sql::Parser;
+
+// ============================================================================
+// SELECT 语句测试
+// ============================================================================
+
+#[test]
+fn parse_basic_select() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(p.parse("SELECT 1").is_ok(), "basic SELECT should parse");
+}
+
+#[test]
+fn parse_select_with_alias_and_multiple_columns() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(
+        p.parse("SELECT 1 AS one, 2 AS two").is_ok(),
+        "SELECT with multiple columns and aliases should parse"
+    );
+}
+
+#[test]
+fn parse_select_from_and_join() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT 1 FROM users JOIN orders ON users.id = orders.user_id";
+    assert!(
+        p.parse(sql).is_ok(),
+        "SELECT with FROM and JOIN should parse"
+    );
+}
+
+#[test]
+fn parse_select_star_from_table() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(p.parse("SELECT * FROM users").is_ok(), "SELECT * FROM should parse");
+}
+
+#[test]
+fn parse_select_with_where() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT id, name FROM users WHERE age > 18";
+    assert!(p.parse(sql).is_ok(), "SELECT with WHERE should parse");
+}
+
+#[test]
+fn parse_select_with_where_and_conditions() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM orders WHERE status = 'active' AND total >= 100";
+    assert!(p.parse(sql).is_ok(), "SELECT with complex WHERE should parse");
+}
+
+#[test]
+fn parse_select_with_group_by() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT category, COUNT(*) FROM products GROUP BY category";
+    assert!(p.parse(sql).is_ok(), "SELECT with GROUP BY should parse");
+}
+
+#[test]
+fn parse_select_with_order_by() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT name, price FROM products ORDER BY price DESC";
+    assert!(p.parse(sql).is_ok(), "SELECT with ORDER BY should parse");
+}
+
+#[test]
+fn parse_select_with_limit() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM users LIMIT 10";
+    assert!(p.parse(sql).is_ok(), "SELECT with LIMIT should parse");
+}
+
+#[test]
+fn parse_select_with_all_clauses() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT category, COUNT(*) AS cnt FROM products WHERE price > 0 GROUP BY category HAVING cnt > 1 ORDER BY cnt DESC LIMIT 5";
+    assert!(p.parse(sql).is_ok(), "complex SELECT with all clauses should parse");
+}
+
+#[test]
+fn parse_select_with_subquery_in_from() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM (SELECT id, name FROM users) AS u";
+    assert!(p.parse(sql).is_ok(), "SELECT with subquery in FROM should parse");
+}
+
+#[test]
+fn parse_select_with_in_expression() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM users WHERE id IN (1, 2, 3)";
+    assert!(p.parse(sql).is_ok(), "SELECT with IN should parse");
+}
+
+#[test]
+fn parse_select_with_between() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM products WHERE price BETWEEN 10 AND 100";
+    assert!(p.parse(sql).is_ok(), "SELECT with BETWEEN should parse");
+}
+
+#[test]
+fn parse_select_with_like() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM users WHERE name LIKE 'John%'";
+    assert!(p.parse(sql).is_ok(), "SELECT with LIKE should parse");
+}
+
+#[test]
+fn parse_select_with_case_expression() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT CASE WHEN score >= 90 THEN 'A' WHEN score >= 80 THEN 'B' ELSE 'C' END AS grade FROM results";
+    assert!(p.parse(sql).is_ok(), "SELECT with CASE should parse");
+}
+
+#[test]
+fn parse_select_with_left_join() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT u.id, o.total FROM users u LEFT JOIN orders o ON u.id = o.user_id";
+    assert!(p.parse(sql).is_ok(), "SELECT with LEFT JOIN should parse");
+}
+
+#[test]
+fn parse_select_with_right_join() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT u.id, o.total FROM users u RIGHT JOIN orders o ON u.id = o.user_id";
+    assert!(p.parse(sql).is_ok(), "SELECT with RIGHT JOIN should parse");
+}
+
+#[test]
+fn parse_select_with_inner_join() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT u.id, o.total FROM users u INNER JOIN orders o ON u.id = o.user_id";
+    assert!(p.parse(sql).is_ok(), "SELECT with INNER JOIN should parse");
+}
+
+#[test]
+fn parse_select_with_cross_join() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM users CROSS JOIN orders";
+    assert!(p.parse(sql).is_ok(), "SELECT with CROSS JOIN should parse");
+}
+
+#[test]
+fn parse_select_with_full_join() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM users FULL JOIN orders ON users.id = orders.user_id";
+    assert!(p.parse(sql).is_ok(), "SELECT with FULL JOIN should parse");
+}
+
+#[test]
+fn parse_select_with_field_alias() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT first_name AS name FROM employees";
+    assert!(p.parse(sql).is_ok(), "SELECT with field alias should parse");
+}
+
+#[test]
+fn parse_select_with_table_prefix() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT users.id, users.name FROM users";
+    assert!(p.parse(sql).is_ok(), "SELECT with table prefix should parse");
+}
+
+#[test]
+fn parse_select_with_arithmetic_expression() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT price * quantity AS total FROM order_items";
+    assert!(p.parse(sql).is_ok(), "SELECT with arithmetic expression should parse");
+}
+
+#[test]
+fn parse_select_with_parenthesized_expression() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM items WHERE (price + tax) * 1.1 > 100";
+    assert!(p.parse(sql).is_ok(), "SELECT with parenthesized expression should parse");
+}
+
+// ============================================================================
+// INSERT 语句测试
+// ============================================================================
+
+#[test]
+fn parse_basic_insert() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30)";
+    assert!(p.parse(sql).is_ok(), "basic INSERT should parse");
+}
+
+#[test]
+fn parse_insert_multiple_rows() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "INSERT INTO users (id, name) VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie')";
+    assert!(p.parse(sql).is_ok(), "INSERT with multiple rows should parse");
+}
+
+#[test]
+fn parse_insert_single_column() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "INSERT INTO logs (message) VALUES ('Hello World')";
+    assert!(p.parse(sql).is_ok(), "INSERT with single column should parse");
+}
+
+// ============================================================================
+// UPDATE 语句测试
+// ============================================================================
+
+#[test]
+fn parse_basic_update() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "UPDATE users SET name = 'Bob' WHERE id = 1";
+    assert!(p.parse(sql).is_ok(), "basic UPDATE should parse");
+}
+
+#[test]
+fn parse_update_multiple_columns() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "UPDATE products SET price = 19.99, stock = 100 WHERE id = 5";
+    assert!(p.parse(sql).is_ok(), "UPDATE with multiple columns should parse");
+}
+
+#[test]
+fn parse_update_without_where() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "UPDATE users SET status = 'inactive'";
+    assert!(p.parse(sql).is_ok(), "UPDATE without WHERE should parse");
+}
+
+// ============================================================================
+// DELETE 语句测试
+// ============================================================================
+
+#[test]
+fn parse_basic_delete() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "DELETE FROM users WHERE id = 1";
+    assert!(p.parse(sql).is_ok(), "basic DELETE should parse");
+}
+
+#[test]
+fn parse_delete_with_condition() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "DELETE FROM orders WHERE status = 'cancelled' AND total < 0";
+    assert!(p.parse(sql).is_ok(), "DELETE with complex condition should parse");
+}
+
+#[test]
+fn parse_delete_without_where() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "DELETE FROM users";
+    assert!(p.parse(sql).is_ok(), "DELETE without WHERE should parse");
+}
+
+// ============================================================================
+// SET 操作 (UNION / INTERSECT / EXCEPT) 测试
+// ============================================================================
+
+#[test]
+fn parse_select_union() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT id FROM users UNION SELECT id FROM admins";
+    assert!(p.parse(sql).is_ok(), "SELECT with UNION should parse");
+}
+
+#[test]
+fn parse_select_union_all() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT id FROM users UNION ALL SELECT id FROM admins";
+    assert!(p.parse(sql).is_ok(), "SELECT with UNION ALL should parse");
+}
+
+#[test]
+fn parse_select_intersect() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT id FROM users INTERSECT SELECT id FROM admins";
+    assert!(p.parse(sql).is_ok(), "SELECT with INTERSECT should parse");
+}
+
+#[test]
+fn parse_select_except() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT id FROM users EXCEPT SELECT id FROM admins";
+    assert!(p.parse(sql).is_ok(), "SELECT with EXCEPT should parse");
+}
+
+// ============================================================================
+// 复杂表达式测试
+// ============================================================================
+
+#[test]
+fn parse_complex_expression_and_or_not() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM t WHERE (a > 1 AND b < 2) OR (c = 3 AND d != 4)";
+    assert!(p.parse(sql).is_ok(), "complex AND/OR expression should parse");
+}
+
+#[test]
+fn parse_not_between_expression() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM products WHERE price NOT BETWEEN 10 AND 20";
+    assert!(p.parse(sql).is_ok(), "NOT BETWEEN expression should parse");
+}
+
+#[test]
+fn parse_not_in_expression() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM users WHERE id NOT IN (1, 2, 3)";
+    assert!(p.parse(sql).is_ok(), "NOT IN expression should parse");
+}
+
+#[test]
+fn parse_not_like_expression() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM users WHERE name NOT LIKE 'Test%'";
+    assert!(p.parse(sql).is_ok(), "NOT LIKE expression should parse");
+}
+
+// ============================================================================
+// 边界情况测试
+// ============================================================================
+
+#[test]
+fn parse_empty_input() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(
+        p.parse("").is_err(),
+        "empty input should fail to parse"
+    );
+}
+
+#[test]
+fn parse_whitespace_only() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(
+        p.parse("   ").is_err(),
+        "whitespace-only input should fail to parse"
+    );
+}
+
+#[test]
+fn parse_lowercase_keyword() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(p.parse("select * from users").is_ok(), "lowercase keywords should parse");
+}
+
+#[test]
+fn parse_uppercase_keyword() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(p.parse("SELECT * FROM USERS").is_ok(), "uppercase keywords should parse");
+}
+
+#[test]
+fn parse_mixed_case_keyword() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(p.parse("Select * From users").is_ok(), "mixed-case keywords should parse");
+}
+
+// ============================================================================
+// 错误路径测试
+// ============================================================================
+
+#[test]
+fn parse_invalid_syntax() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(
+        p.parse("SELICT 1").is_err(),
+        "invalid keyword should fail to parse"
+    );
+}
+
+#[test]
+fn parse_invalid_expression() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(
+        p.parse("SELECT WHERE").is_err(),
+        "SELECT without columns should fail to parse"
+    );
+}
+
+#[test]
+fn parse_unterminated_string() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(
+        p.parse("SELECT 'hello").is_err(),
+        "unterminated string should fail to parse"
+    );
+}
+
+#[test]
+fn parse_invalid_number() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    assert!(
+        p.parse("SELECT 12a34").is_err(),
+        "invalid number format should fail to parse"
+    );
+}
+
+// ============================================================================
+// 综合 SQL 场景测试
+// ============================================================================
+
+#[test]
+fn parse_real_world_query_select_from_where_order_by_limit() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "\
+SELECT u.id, u.name, o.total AS order_total, o.created_at \
+FROM users u \
+JOIN orders o ON u.id = o.user_id \
+WHERE u.active = 1 AND o.total > 0 \
+ORDER BY o.created_at DESC \
+LIMIT 20";
+    assert!(p.parse(sql).is_ok(), "real-world query should parse");
+}
+
+#[test]
+fn parse_nested_subquery() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT * FROM (SELECT * FROM (SELECT id FROM users) AS inner_t) AS outer_t";
+    assert!(p.parse(sql).is_ok(), "nested subquery should parse");
+}
+
+#[test]
+fn parse_comment_handling_dash() {
+    // The lexer treats unknown symbols as Unknown tokens, but the parser should handle gracefully
+    let p = Parser::new().expect("failed to initialize Parser");
+    // This is not a valid SQL comment, just a test of dash handling
+    let sql = "SELECT 1 -- this is not a real comment";
+    // The parser may or may not parse this - it depends on implementation
+    let _ = p.parse(sql);
+}
+
+#[test]
+fn parse_function_call_with_expression() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT CONCAT(first_name, ' ', last_name) AS full_name FROM employees";
+    assert!(p.parse(sql).is_ok(), "function call with expression should parse");
+}
+
+#[test]
+fn parse_multiple_joins_chain() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "\
+SELECT * FROM users u \
+JOIN orders o ON u.id = o.user_id \
+JOIN order_items oi ON o.id = oi.order_id \
+JOIN products p ON oi.product_id = p.id";
+    assert!(p.parse(sql).is_ok(), "multiple JOINs chain should parse");
+}

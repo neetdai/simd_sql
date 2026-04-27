@@ -107,6 +107,10 @@ pub enum Expr {
     In(In),
     Case(CaseExpr),
     Like(Like),
+    IsNull(IsNull),
+    Exists(Box<ExistsExpr>),
+    BoolLiteral(bool),
+    NullLiteral,
 }
 
 impl Expr {
@@ -207,7 +211,6 @@ impl PrattParserTrait for Expr {
             Some(TokenKind::Number) => Self::class_number_literal(token_table, cursor),
             Some(TokenKind::StringLiteral) => Self::class_string_literal(token_table, cursor),
             Some(TokenKind::Identifier) => {
-                // 检查是否是函数调用
                 if let Some(TokenKind::LeftParen) = token_table.get_kind(*cursor + 1) {
                     Self::class_function_call(token_table, cursor)
                 } else if let Ok(star) = Self::class_star(token_table, cursor) {
@@ -225,6 +228,30 @@ impl PrattParserTrait for Expr {
                 Ok(expr)
             }
             Some(TokenKind::Keyword(Keyword::Case)) => Self::class_case(token_table, cursor),
+            Some(TokenKind::Keyword(Keyword::True)) => {
+                *cursor += 1;
+                Ok(Expr::BoolLiteral(true))
+            }
+            Some(TokenKind::Keyword(Keyword::False)) => {
+                *cursor += 1;
+                Ok(Expr::BoolLiteral(false))
+            }
+            Some(TokenKind::Keyword(Keyword::Null)) => {
+                *cursor += 1;
+                Ok(Expr::NullLiteral)
+            }
+            Some(TokenKind::Keyword(Keyword::Exists)) => {
+                *cursor += 1;
+                expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
+                *cursor += 1;
+                let select_stmt = SelectStatement::new(token_table, cursor)?;
+                expect_kind(token_table, cursor, &TokenKind::RightParen)?;
+                *cursor += 1;
+                Ok(Expr::Exists(Box::new(ExistsExpr {
+                    is_not: false,
+                    subquery: Box::new(select_stmt),
+                })))
+            }
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
         }
     }
@@ -308,8 +335,32 @@ impl PrattParserTrait for Expr {
                         let like = Like::build(true, Box::new(left), token_table, cursor);
                         like.map(|e| (Expr::Like(e), Flow::Continue))
                     }
+                    Some(&TokenKind::Keyword(Keyword::Exists)) => {
+                        let exists =
+                            ExistsExpr::build(true, token_table, cursor);
+                        exists.map(|e| (Expr::Exists(Box::new(e)), Flow::Continue))
+                    }
                     _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
                 }
+            }
+            Some(&TokenKind::Keyword(Keyword::Is)) => {
+                *cursor += 1;
+                let is_not =
+                    if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Not)) {
+                        *cursor += 1;
+                        true
+                    } else {
+                        false
+                    };
+                expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Null))?;
+                *cursor += 1;
+                Ok((
+                    Expr::IsNull(IsNull {
+                        is_not,
+                        field: Box::new(left),
+                    }),
+                    Flow::Continue,
+                ))
             }
             Some(&TokenKind::Keyword(Keyword::Between)) => {
                 let between = Between::build(false, Box::new(left), token_table, cursor);
@@ -748,6 +799,51 @@ impl Like {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct IsNull {
+    pub is_not: bool,
+    pub field: Box<Expr>,
+}
+
+impl IsNull {
+    pub(crate) fn build(
+        is_not: bool,
+        field: Box<Expr>,
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
+        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Is))?;
+        *cursor += 1;
+        Ok(Self { is_not, field })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ExistsExpr {
+    pub is_not: bool,
+    pub subquery: SubSelectStatement,
+}
+
+impl ExistsExpr {
+    pub(crate) fn build(
+        is_not: bool,
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
+        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Exists))?;
+        *cursor += 1;
+        expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
+        *cursor += 1;
+        let select_stmt = SelectStatement::new(token_table, cursor)?;
+        expect_kind(token_table, cursor, &TokenKind::RightParen)?;
+        *cursor += 1;
+        Ok(Self {
+            is_not,
+            subquery: Box::new(select_stmt),
+        })
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct CaseExpr {
     pub condition: Option<Box<Expr>>,
     pub when_clauses: MiniVec<WhenClause>,
@@ -818,8 +914,8 @@ mod test {
         common::{
             alias::Alias,
             expr::{
-                Between, BinaryOp, BinaryOperator, Expr, Field, FunctionCall, In, InValue,
-                NumbericLiteral, Star, StringLiteral,
+                Between, BinaryOp, BinaryOperator, ExistsExpr, Expr, Field, FunctionCall, In,
+                InValue, IsNull, Like, NumbericLiteral, Star, StringLiteral,
             },
         },
         keyword::Keyword,
@@ -1751,5 +1847,98 @@ mod test {
         let mut cursor = 0;
         let result = Expr::build(&token_table, &mut cursor);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_is_null() {
+        let mut token_table = TokenTable::with_capacity(3);
+        token_table.push(TokenKind::Identifier, 0, 3);     // col
+        token_table.push(TokenKind::Keyword(Keyword::Is), 4, 5); // IS
+        token_table.push(TokenKind::Keyword(Keyword::Null), 6, 9); // NULL
+
+        let mut cursor = 0;
+        let expr = Expr::build(&token_table, &mut cursor).unwrap();
+        assert_eq!(
+            expr,
+            Expr::IsNull(IsNull {
+                is_not: false,
+                field: Box::new(Expr::Field(Field {
+                    prefix: None,
+                    value: 0,
+                })),
+            })
+        );
+    }
+
+    #[test]
+    fn test_is_not_null() {
+        let mut token_table = TokenTable::with_capacity(4);
+        token_table.push(TokenKind::Identifier, 0, 3);     // col
+        token_table.push(TokenKind::Keyword(Keyword::Is), 4, 5); // IS
+        token_table.push(TokenKind::Keyword(Keyword::Not), 6, 8); // NOT
+        token_table.push(TokenKind::Keyword(Keyword::Null), 9, 12); // NULL
+
+        let mut cursor = 0;
+        let expr = Expr::build(&token_table, &mut cursor).unwrap();
+        assert_eq!(
+            expr,
+            Expr::IsNull(IsNull {
+                is_not: true,
+                field: Box::new(Expr::Field(Field {
+                    prefix: None,
+                    value: 0,
+                })),
+            })
+        );
+    }
+
+    #[test]
+    fn test_bool_literal_true() {
+        let mut token_table = TokenTable::with_capacity(1);
+        token_table.push(TokenKind::Keyword(Keyword::True), 0, 3);
+
+        let mut cursor = 0;
+        let expr = Expr::build(&token_table, &mut cursor).unwrap();
+        assert_eq!(expr, Expr::BoolLiteral(true));
+    }
+
+    #[test]
+    fn test_bool_literal_false() {
+        let mut token_table = TokenTable::with_capacity(1);
+        token_table.push(TokenKind::Keyword(Keyword::False), 0, 4);
+
+        let mut cursor = 0;
+        let expr = Expr::build(&token_table, &mut cursor).unwrap();
+        assert_eq!(expr, Expr::BoolLiteral(false));
+    }
+
+    #[test]
+    fn test_null_literal() {
+        let mut token_table = TokenTable::with_capacity(1);
+        token_table.push(TokenKind::Keyword(Keyword::Null), 0, 3);
+
+        let mut cursor = 0;
+        let expr = Expr::build(&token_table, &mut cursor).unwrap();
+        assert_eq!(expr, Expr::NullLiteral);
+    }
+
+    #[test]
+    fn test_exists_subquery() {
+        let mut token_table = TokenTable::with_capacity(10);
+        token_table.push(TokenKind::Keyword(Keyword::Exists), 0, 5);
+        token_table.push(TokenKind::LeftParen, 6, 6);
+        token_table.push(TokenKind::Keyword(Keyword::Select), 7, 12);
+        token_table.push(TokenKind::Multiply, 13, 13);
+        token_table.push(TokenKind::Keyword(Keyword::From), 14, 17);
+        token_table.push(TokenKind::Identifier, 18, 22);   // users
+        token_table.push(TokenKind::Keyword(Keyword::Where), 23, 27);
+        token_table.push(TokenKind::Identifier, 28, 29);   // id
+        token_table.push(TokenKind::Equal, 30, 30);
+        token_table.push(TokenKind::Number, 31, 31);
+        token_table.push(TokenKind::RightParen, 32, 32);
+
+        let mut cursor = 0;
+        let expr = Expr::build(&token_table, &mut cursor).unwrap();
+        assert!(matches!(expr, Expr::Exists(_)));
     }
 }

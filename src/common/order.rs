@@ -17,14 +17,21 @@ pub enum OrderDirection {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum NullsOrder {
+    First,
+    Last,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct OrderItem {
-    expr: Expr,
-    direction: OrderDirection,
+    pub expr: Expr,
+    pub direction: OrderDirection,
+    pub nulls_order: Option<NullsOrder>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Order {
-    columns: MiniVec<OrderItem>,
+    pub columns: MiniVec<OrderItem>,
 }
 
 impl Order {
@@ -53,7 +60,34 @@ impl Order {
                         } else {
                             OrderDirection::ASC
                         };
-                    columns.push(OrderItem { expr, direction });
+                    let nulls_order =
+                        if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Nulls)) {
+                            *cursor += 1;
+                            if maybe_kind(
+                                token_table,
+                                cursor,
+                                &TokenKind::Keyword(Keyword::First),
+                            ) {
+                                *cursor += 1;
+                                Some(NullsOrder::First)
+                            } else if maybe_kind(
+                                token_table,
+                                cursor,
+                                &TokenKind::Keyword(Keyword::Last),
+                            ) {
+                                *cursor += 1;
+                                Some(NullsOrder::Last)
+                            } else {
+                                return Err(ParserError::SyntaxError(*cursor, *cursor));
+                            }
+                        } else {
+                            None
+                        };
+                    columns.push(OrderItem {
+                        expr,
+                        direction,
+                        nulls_order,
+                    });
                 }
                 Some(TokenKind::Comma) => {
                     *cursor += 1;

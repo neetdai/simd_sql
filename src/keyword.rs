@@ -61,6 +61,9 @@ pub enum Keyword {
     Except,
     True,
     False,
+    First,
+    Last,
+    Nulls,
 }
 
 // impl std::str::FromStr for Keyword {

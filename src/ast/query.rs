@@ -1,11 +1,14 @@
+use minivec::MiniVec;
+
 use crate::error::ParserError;
 use crate::{
     SelectStatement,
+    ast::cte::CteBinding,
     common::{
         limit::Limit,
         order::Order,
         pratt_parser::{Flow, PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
-        utils::maybe_kind,
+        utils::{expect_kind, maybe_kind},
     },
     keyword::Keyword,
     token::{TokenKind, TokenTable},
@@ -40,7 +43,10 @@ impl PrecedenceTrait for SetOperator {
 #[derive(Debug, PartialEq)]
 pub enum Query {
     Select(SelectStatement),
-
+    Cte {
+        ctes: MiniVec<CteBinding>,
+        query: Box<Query>,
+    },
     SetOperation {
         op: SetOperator,
         left: Box<Query>,
@@ -113,6 +119,13 @@ impl PrattParserTrait for Query {
         match token_table.get_kind(*cursor) {
             Some(TokenKind::Keyword(Keyword::Select)) => {
                 SelectStatement::new(token_table, cursor).map(Query::Select)
+            }
+            Some(TokenKind::LeftParen) => {
+                *cursor += 1;
+                let query = Self::build(token_table, cursor)?;
+                expect_kind(token_table, cursor, &TokenKind::RightParen)?;
+                *cursor += 1;
+                Ok(query)
             }
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
         }

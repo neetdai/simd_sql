@@ -1,7 +1,7 @@
 
 use super::{insert::InsertStatement, update::UpdateStatement};
 use crate::{
-    ast::{delete::DeleteStatement, query::Query},
+    ast::{cte::Cte, delete::DeleteStatement, query::Query},
     error::ParserError,
     keyword::Keyword,
     token::{TokenKind, TokenTable},
@@ -22,6 +22,14 @@ impl Statement {
 
     fn match_statement(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
         match token_table.get_kind(*cursor) {
+            Some(TokenKind::Keyword(Keyword::With)) => {
+                let cte = Cte::build(token_table, cursor)?;
+                let query = Query::build(token_table, cursor)?;
+                Ok(Self::Query(Query::Cte {
+                    ctes: cte.bindings,
+                    query: Box::new(query),
+                }))
+            }
             Some(TokenKind::Keyword(Keyword::Select)) => {
                 Query::build(token_table, cursor).map(Self::Query)
             }

@@ -449,3 +449,80 @@ JOIN order_items oi ON o.id = oi.order_id \
 JOIN products p ON oi.product_id = p.id";
     assert!(p.parse(sql).is_ok(), "multiple JOINs chain should parse");
 }
+
+// ============================================================================
+// CTE (WITH 子句) 测试
+// ============================================================================
+
+#[test]
+fn parse_cte_basic() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "WITH cte AS (SELECT id FROM users) SELECT * FROM cte";
+    assert!(p.parse(sql).is_ok(), "basic WITH ... AS SELECT should parse");
+}
+
+#[test]
+fn parse_cte_multiple_bindings() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "\
+WITH \
+  active AS (SELECT id FROM users WHERE status = 'active'), \
+  orders AS (SELECT user_id, COUNT(*) as cnt FROM orders GROUP BY user_id) \
+SELECT a.id, o.cnt FROM active a JOIN orders o ON a.id = o.user_id";
+    assert!(p.parse(sql).is_ok(), "multiple CTE bindings should parse");
+}
+
+#[test]
+fn parse_cte_with_column_names() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "WITH cte (id, name) AS (SELECT id, name FROM users) SELECT id FROM cte";
+    assert!(p.parse(sql).is_ok(), "CTE with column names should parse");
+}
+
+#[test]
+fn parse_cte_with_recursive() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "\
+WITH RECURSIVE t(n) AS (\
+  SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 10\
+) SELECT n FROM t";
+    assert!(p.parse(sql).is_ok(), "WITH RECURSIVE should parse");
+}
+
+#[test]
+fn parse_cte_with_set_operations() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "\
+WITH cte AS (SELECT id FROM users) \
+(SELECT id FROM cte) UNION (SELECT id FROM cte) \
+ORDER BY id";
+    assert!(p.parse(sql).is_ok(), "CTE with set operations should parse");
+}
+
+#[test]
+fn parse_cte_with_joins() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "\
+WITH dept_salary AS (\
+  SELECT d.id, SUM(e.salary) as total \
+  FROM departments d \
+  JOIN employees e ON d.id = e.dept_id \
+  GROUP BY d.id\
+) \
+SELECT d.*, ds.total \
+FROM departments d \
+JOIN dept_salary ds ON d.id = ds.id \
+WHERE ds.total > 10000";
+    assert!(p.parse(sql).is_ok(), "CTE with JOINs should parse");
+}
+
+#[test]
+fn parse_cte_chained() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "\
+WITH \
+  step1 AS (SELECT id FROM users WHERE status = 'active'), \
+  step2 AS (SELECT id FROM step1 WHERE id > 100) \
+SELECT * FROM step2";
+    assert!(p.parse(sql).is_ok(), "chained CTE should parse");
+}

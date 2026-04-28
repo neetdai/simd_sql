@@ -62,6 +62,8 @@ pub enum Keyword {
     First,
     Last,
     Nulls,
+    With,
+    Recursive,
 }
 
 // impl std::str::FromStr for Keyword {

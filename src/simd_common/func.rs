@@ -46,6 +46,36 @@ pub(crate) fn mixed_match<const N1: usize, const N2: usize>(
     }
 }
 
+pub(crate) fn skip_until_match<const N: usize>(
+    slice: &[u8],
+    matches: [u8; N],
+    start_pos: usize,
+) -> (usize, isize) {
+    cfg_select! {
+        target_feature = "sse2" => {
+            skip_until_match_sse(slice, matches, start_pos)
+        }
+        _ => {
+            skip_until_match_basic(slice, matches, start_pos)
+        }
+    }
+}
+
+pub(crate) fn skip_until_sequence<const N: usize>(
+    slice: &[u8],
+    sequence: [u8; N],
+    start_pos: usize,
+) -> (usize, isize) {
+    cfg_select! {
+        target_feature = "sse2" => {
+            skip_until_sequence_sse(slice, sequence, start_pos)
+        }
+        _ => {
+            skip_until_sequence_basic(slice, sequence, start_pos)
+        }
+    }
+}
+
 fn find_consecutive_in_range_basic(
     slice: &[u8],
     matches: (u8, u8),
@@ -199,6 +229,63 @@ fn mixed_match_basic<const N1: usize, const N2: usize>(
         }
     }
     (start_pos, end_pos)
+}
+
+fn skip_until_match_basic<const N: usize>(
+    slice: &[u8],
+    matches: [u8; N],
+    start_pos: usize,
+) -> (usize, isize) {
+    if start_pos >= slice.len() {
+        return (start_pos, -1);
+    }
+    for i in start_pos..slice.len() {
+        if matches.contains(&slice[i]) {
+            return (start_pos, i as isize);
+        }
+    }
+    (start_pos, -1)
+}
+
+fn skip_until_sequence_basic<const N: usize>(
+    slice: &[u8],
+    sequence: [u8; N],
+    start_pos: usize,
+) -> (usize, isize) {
+    if start_pos + N > slice.len() {
+        return (start_pos, -1);
+    }
+    let end = slice.len().saturating_sub(N - 1);
+    for i in start_pos..end {
+        if &slice[i..i + N] == &sequence[..] {
+            return (start_pos, i as isize);
+        }
+    }
+    (start_pos, -1)
+}
+
+#[cfg(target_feature = "sse2")]
+fn skip_until_match_sse<const N: usize>(
+    slice: &[u8],
+    matches: [u8; N],
+    start_pos: usize,
+) -> (usize, isize) {
+    if start_pos >= slice.len() {
+        return (start_pos, -1);
+    }
+    Sse::skip_until_match(slice, matches, start_pos)
+}
+
+#[cfg(target_feature = "sse2")]
+fn skip_until_sequence_sse<const N: usize>(
+    slice: &[u8],
+    sequence: [u8; N],
+    start_pos: usize,
+) -> (usize, isize) {
+    if start_pos >= slice.len() {
+        return (start_pos, -1);
+    }
+    Sse::skip_until_sequence(slice, sequence, start_pos)
 }
 
 #[cfg(test)]

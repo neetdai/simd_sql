@@ -151,6 +151,95 @@ impl SimdTrait for Sse {
 
         (start_pos, end_pos)
     }
+
+    fn skip_until_match<const N: usize>(
+        slice: &[u8],
+        matches: [u8; N],
+        start_pos: usize,
+    ) -> (usize, isize) {
+        if start_pos >= slice.len() {
+            return (start_pos, -1);
+        }
+        let mut pos = start_pos;
+        let len = slice.len();
+
+        let lanes = matches.map(|m| unsafe {
+            x86_64::_mm_set1_epi8(m.cast_signed())
+        });
+
+        unsafe {
+            while pos + Self::LENGTH <= len {
+                let ptr = slice.as_ptr().add(pos).cast();
+                let chunk = x86_64::_mm_loadu_si128(ptr);
+
+                let mut all_mask: u32 = 0;
+                for i in 0..N {
+                    let eq = x86_64::_mm_cmpeq_epi8(chunk, lanes[i]);
+                    all_mask |= x86_64::_mm_movemask_epi8(eq) as u32;
+                }
+
+                if all_mask != 0 {
+                    let offset = all_mask.trailing_zeros() as usize;
+                    return (start_pos, (pos + offset) as isize);
+                }
+                pos += Self::LENGTH;
+            }
+        }
+
+        // scalar tail
+        while pos < len {
+            if matches.contains(&slice[pos]) {
+                return (start_pos, pos as isize);
+            }
+            pos += 1;
+        }
+        (start_pos, -1)
+    }
+
+    fn skip_until_sequence<const N: usize>(
+        slice: &[u8],
+        sequence: [u8; N],
+        start_pos: usize,
+    ) -> (usize, isize) {
+        if start_pos + N > slice.len() {
+            return (start_pos, -1);
+        }
+        let mut pos = start_pos;
+        let len = slice.len();
+
+        let lanes = sequence.map(|m| unsafe {
+            x86_64::_mm_set1_epi8(m.cast_signed())
+        });
+
+        unsafe {
+            while pos + Self::LENGTH <= len {
+                let ptr = slice.as_ptr().add(pos).cast();
+                let chunk = x86_64::_mm_loadu_si128(ptr);
+
+                let mut mask: u32 = 0xFFFF;
+                for i in 0..N {
+                    let eq = x86_64::_mm_cmpeq_epi8(chunk, lanes[i]);
+                    mask &= (x86_64::_mm_movemask_epi8(eq) as u32) >> i;
+                }
+
+                if mask != 0 {
+                    let offset = mask.trailing_zeros() as usize;
+                    return (start_pos, (pos + offset) as isize);
+                }
+                pos += Self::LENGTH - (N - 1);
+            }
+        }
+
+        // scalar tail
+        let end = len.saturating_sub(N - 1);
+        while pos < end {
+            if &slice[pos..pos + N] == &sequence[..] {
+                return (start_pos, pos as isize);
+            }
+            pos += 1;
+        }
+        (start_pos, -1)
+    }
 }
 
 #[cfg(test)]
@@ -206,5 +295,45 @@ mod test {
             Sse::mixed_match(slice, [(b'0', b'9'), (b'a', b'z'), (b'A', b'Z')], [b'_'], 0);
         assert_eq!(start, 0);
         assert_eq!(end, 63);
+    }
+
+    #[test]
+    fn test_skip_until_match() {
+        let slice = b"hello'world";
+        let (start, end) = Sse::skip_until_match(slice, [b'\''], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 5);
+
+        let slice = b"no match";
+        let (start, end) = Sse::skip_until_match(slice, [b'\''], 0);
+        assert_eq!(end, -1);
+
+        let slice = b"a\tb\nc\rd";
+        let (start, end) = Sse::skip_until_match(slice, [b'\n', b'\r', b'\t'], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 1); // \t is first
+
+        // start at later position
+        let slice = b"abc'def'ghi";
+        let (start, end) = Sse::skip_until_match(slice, [b'\''], 4);
+        assert_eq!(end, 7);
+    }
+
+    #[test]
+    fn test_skip_until_sequence() {
+        let slice = b"before */ after";
+        let (start, end) = Sse::skip_until_sequence(slice, [b'*', b'/'], 0);
+        assert_eq!(start, 0);
+        assert_eq!(end, 7);
+
+        let slice = b"no match";
+        let (start, end) = Sse::skip_until_sequence(slice, [b'*', b'/'], 0);
+        assert_eq!(end, -1);
+
+        // 跨 SSE 16 字节边界
+        let mut data = vec![b'a'; 15];
+        data.extend_from_slice(b"*/");
+        let (start, end) = Sse::skip_until_sequence(&data, [b'*', b'/'], 0);
+        assert_eq!(end, 15);
     }
 }

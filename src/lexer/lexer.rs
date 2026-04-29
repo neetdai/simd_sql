@@ -5,7 +5,7 @@ use crate::{
     find_consecutive_in_range,
     keyword::{Keyword, KeywordMap},
     longest_consecutive_matching,
-    simd_common::mixed_match,
+    simd_common::{is_escaped, mixed_match, skip_until_match, skip_until_sequence},
     token::{TokenKind, TokenTable},
 };
 
@@ -479,77 +479,43 @@ impl<'a> Lexer<'a> {
             .match_keyword(unsafe { std::str::from_utf8_unchecked(source) })
     }
 
+    fn skip_block_comment(&mut self) -> Result<(), ParserError> {
+        let (_, end) = skip_until_sequence(self.inner, [b'*', b'/'], self.position + 2);
+        if end == -1 {
+            return Err(ParserError::InvalidToken(self.position, self.position));
+        }
+        self.position = end as usize + 2;
+        Ok(())
+    }
+
+    fn skip_line_comment(&mut self) {
+        let (_, end) = skip_until_match(self.inner, [b'\n'], self.position + 2);
+        if end == -1 {
+            self.position = self.inner.len();
+        } else {
+            self.position = end as usize + 1;
+        }
+    }
+
     // 匹配字符串
     // #[inline]
     fn scan_string(&mut self, terminator: u8) -> Result<(TokenKind, usize, usize), ParserError> {
         let start = self.position;
         let mut pos = self.position + 1;
-        let length = self.inner.len();
 
-        // if is_x86_feature_detected!("avx2") {
-        //     while pos + 32 < length {
-        //         let slice = Simd::<u8, 32>::from_slice(&self.inner[pos..pos + 32]);
-
-        //         let target = Simd::from_array([terminator; 32]);
-        //         let mask = slice.simd_eq(target);
-
-        //         if mask.any() {
-        //             let result = mask.to_bitmask();
-        //             let index = result.trailing_zeros() as usize;
-        //             let prev_value = self.inner[pos + index - 1];
-        //             if prev_value != b'\\' {
-        //                 pos += index;
-        //                 break;
-        //             } else {
-        //                 pos += index + 1;
-        //             }
-        //         } else {
-        //             pos += 32;
-        //         }
-        //     }
-        // }
-
-        // if is_x86_feature_detected!("sse4.2") {
-        //     while pos + 16 < length {
-        //         let slice = Simd::<u8, 16>::from_slice(&self.inner[pos..pos + 16]);
-        //         let target = Simd::from_array([terminator; 16]);
-        //         let mask = slice.simd_eq(target);
-
-        //         if mask.any() {
-        //             let result = mask.to_bitmask();
-        //             let index = result.trailing_zeros() as usize;
-        //             let prev_value = self.inner[pos + index - 1];
-        //             if prev_value != b'\\' {
-        //                 pos += index;
-        //                 break;
-        //             } else {
-        //                 pos += index + 1;
-        //             }
-        //         } else {
-        //             pos += 16;
-        //         }
-        //     }
-        // }
-
-        let mut found_terminator = false;
-        let tmp_pos = pos;
-        for index in tmp_pos..length {
-            let c = &self.inner[index];
-            let prev_c = &self.inner[index - 1];
-            if *c == terminator && *prev_c != b'\\' {
-                found_terminator = true;
-                break;
+        loop {
+            let (_, next) = skip_until_match(self.inner, [terminator], pos);
+            if next == -1 {
+                return Err(ParserError::InvalidToken(start, self.position));
             }
-            pos += 1;
-        }
 
-        if !found_terminator {
-            return Err(ParserError::InvalidToken(start, self.position));
+            let candidate = next as usize;
+            if !is_escaped(self.inner, candidate, start) {
+                self.position = candidate;
+                return Ok((TokenKind::StringLiteral, start, self.position));
+            }
+            pos = candidate + 1;
         }
-
-        let end = pos;
-        self.position = pos;
-        Ok((TokenKind::StringLiteral, start, end))
     }
 
     fn scan_symbol(&mut self, table: &mut TokenTable) -> Result<(), ParserError> {
@@ -605,6 +571,9 @@ impl<'a> Lexer<'a> {
                 self.position += 1;
             }
             Some(b'-') => match self.inner.get(self.position + 1) {
+                Some(b'-') => {
+                    self.skip_line_comment();
+                }
                 Some(b'0'..=b'9') => {
                     let start = self.position;
                     self.position += 1;
@@ -621,10 +590,18 @@ impl<'a> Lexer<'a> {
                 table.push(TokenKind::Multiply, start, end);
                 self.position += 1;
             }
-            Some(b'/') => {
-                table.push(TokenKind::Divide, start, end);
-                self.position += 1;
-            }
+            Some(b'/') => match self.inner.get(self.position + 1) {
+                Some(b'*') => {
+                    self.skip_block_comment()?;
+                }
+                Some(b'/') => {
+                    self.skip_line_comment();
+                }
+                _ => {
+                    table.push(TokenKind::Divide, start, end);
+                    self.position += 1;
+                }
+            },
             Some(b'%') => {
                 table.push(TokenKind::Mod, start, end);
                 self.position += 1;
@@ -1084,13 +1061,14 @@ mod tests {
             }
         );
 
-        let mut lexer = Lexer::new(r#"'hello\\'World'"#, &keyword_map).unwrap();
+        // \\\\' → 偶数个反斜杠，' 未被转义，位置8闭合
+        let mut lexer = Lexer::new(r#"'hello\\'"#, &keyword_map).unwrap();
         let token = lexer.tokenize().unwrap();
         assert_eq!(
             token,
             TokenTable {
                 tokens: vec![TokenKind::StringLiteral],
-                positions: vec![(0, 14)],
+                positions: vec![(0, 8)],
             }
         );
 

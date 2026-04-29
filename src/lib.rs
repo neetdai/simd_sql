@@ -14,4 +14,7 @@ pub use ast::{
     insert::InsertStatement, query::Query, select::SelectStatement, statement::Statement,
 };
 
-pub(crate) use simd_common::{find_consecutive_in_range, longest_consecutive_matching};
+pub(crate) use simd_common::{
+    find_consecutive_in_range, longest_consecutive_matching, skip_until_match,
+    skip_until_sequence,
+};

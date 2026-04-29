@@ -526,3 +526,81 @@ WITH \
 SELECT * FROM step2";
     assert!(p.parse(sql).is_ok(), "chained CTE should parse");
 }
+
+// ============================================================================
+// 窗口函数 (OVER 子句) 测试
+// ============================================================================
+
+#[test]
+fn parse_window_function_row_number() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT ROW_NUMBER() OVER (ORDER BY id) FROM users";
+    assert!(p.parse(sql).is_ok(), "ROW_NUMBER() OVER should parse");
+}
+
+#[test]
+fn parse_window_function_with_partition() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC) as rn FROM employees";
+    assert!(p.parse(sql).is_ok(), "OVER with PARTITION BY should parse");
+}
+
+#[test]
+fn parse_window_function_multiple() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT RANK() OVER (ORDER BY price) as rk, DENSE_RANK() OVER (ORDER BY price) as dr FROM products";
+    assert!(p.parse(sql).is_ok(), "multiple window functions should parse");
+}
+
+#[test]
+fn parse_window_function_benchmark_sql20() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT p.id, p.name, p.price, ROW_NUMBER() OVER (PARTITION BY category ORDER BY price DESC) as rank, RANK() OVER (ORDER BY price) as price_rank, DENSE_RANK() OVER (ORDER BY price) as dense_price_rank FROM products p";
+    assert!(p.parse(sql).is_ok(), "sql_20 window functions should parse");
+}
+
+#[test]
+fn parse_window_function_no_args() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT RANK() OVER (ORDER BY score DESC) FROM students";
+    assert!(p.parse(sql).is_ok(), "window function with no args should parse");
+}
+
+// ============================================================================
+// 注释测试
+// ============================================================================
+
+#[test]
+fn parse_block_comment() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT /* skip */ * FROM users";
+    assert!(p.parse(sql).is_ok(), "block comment should be skipped");
+}
+
+#[test]
+fn parse_line_comment() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT a -- comment\nFROM users";
+    assert!(p.parse(sql).is_ok(), "line comment should be skipped");
+}
+
+#[test]
+fn parse_block_comment_multiline() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT /* line1\nline2 */ id FROM users";
+    assert!(p.parse(sql).is_ok(), "multiline block comment should parse");
+}
+
+#[test]
+fn parse_unterminated_block_comment() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT /* no end";
+    assert!(p.parse(sql).is_err(), "unterminated block comment should error");
+}
+
+#[test]
+fn parse_line_comment_eof() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT id -- no newline";
+    assert!(p.parse(sql).is_ok(), "line comment at EOF should work");
+}

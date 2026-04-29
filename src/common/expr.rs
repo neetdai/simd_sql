@@ -5,6 +5,7 @@ use crate::{
     ast::select::SubSelectStatement,
     common::{
         alias::Aliasable,
+        order::Order,
         pratt_parser::{Flow, PrattOutput, PrattParser, PrattParserTrait, PrecedenceTrait},
         utils::{expect_kind, maybe_kind},
     },
@@ -111,6 +112,7 @@ pub enum Expr {
     Exists(Box<ExistsExpr>),
     BoolLiteral(bool),
     NullLiteral,
+    WindowFunction(Box<WindowFunction>),
 }
 
 impl Expr {
@@ -373,6 +375,21 @@ impl PrattParserTrait for Expr {
             Some(&TokenKind::Keyword(Keyword::Like)) => {
                 let like = Like::build(false, Box::new(left), token_table, cursor);
                 like.map(|e| (Expr::Like(e), Flow::Continue))
+            }
+            Some(&TokenKind::Keyword(Keyword::Over)) => {
+                *cursor += 1;
+                let window_spec = WindowSpec::build(token_table, cursor)?;
+                let function = match left {
+                    Expr::FunctionCall(fc) => fc,
+                    _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
+                };
+                Ok((
+                    Expr::WindowFunction(Box::new(WindowFunction {
+                        function,
+                        window_spec,
+                    })),
+                    Flow::Continue,
+                ))
             }
             _ => Ok((left, Flow::Run)),
         }
@@ -841,6 +858,66 @@ impl ExistsExpr {
             subquery: Box::new(select_stmt),
         })
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct WindowSpec {
+    pub partition_by: Option<MiniVec<Expr>>,
+    pub order_by: Option<Order>,
+}
+
+impl WindowSpec {
+    pub(crate) fn build(
+        token_table: &TokenTable,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
+        expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
+        *cursor += 1;
+
+        let partition_by =
+            if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Partition)) {
+                *cursor += 1;
+                expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::By))?;
+                *cursor += 1;
+                let mut cols = MiniVec::new();
+                loop {
+                    match token_table.get_kind(*cursor) {
+                        Some(TokenKind::Comma) => {
+                            *cursor += 1;
+                        }
+                        Some(TokenKind::Keyword(Keyword::Order))
+                        | Some(TokenKind::RightParen) => break,
+                        Some(TokenKind::Identifier)
+                        | Some(TokenKind::Number)
+                        | Some(TokenKind::StringLiteral)
+                        | Some(TokenKind::Multiply) => {
+                            cols.push(Expr::build(token_table, cursor)?);
+                        }
+                        _ => break,
+                    }
+                }
+                Some(cols)
+            } else {
+                None
+            };
+
+        let order_by =
+            if maybe_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Order)) {
+                Some(Order::build(token_table, cursor)?)
+            } else {
+                None
+            };
+
+        expect_kind(token_table, cursor, &TokenKind::RightParen)?;
+        *cursor += 1;
+        Ok(Self { partition_by, order_by })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct WindowFunction {
+    pub function: FunctionCall,
+    pub window_spec: WindowSpec,
 }
 
 #[derive(Debug, PartialEq)]

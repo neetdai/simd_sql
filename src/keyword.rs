@@ -64,6 +64,8 @@ pub enum Keyword {
     Nulls,
     With,
     Recursive,
+    Over,
+    Partition,
 }
 
 // impl std::str::FromStr for Keyword {

@@ -7,19 +7,25 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub enum Statement {
-    Query(Query),
-    Insert(InsertStatement),
-    Update(UpdateStatement),
-    Delete(DeleteStatement),
+pub enum Statement<'a> {
+    Query(Query<'a>),
+    Insert(InsertStatement<'a>),
+    Update(UpdateStatement<'a>),
+    Delete(DeleteStatement<'a>),
 }
 
-impl Statement {
-    pub fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> Statement<'a> {
+    pub fn new(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         Self::match_statement(token_table, cursor)
     }
 
-    fn match_statement(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    fn match_statement(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         match token_table.get_kind(*cursor) {
             Some(TokenKind::Keyword(Keyword::With)) => {
                 let cte = Cte::build(token_table, cursor)?;

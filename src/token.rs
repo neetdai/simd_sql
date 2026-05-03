@@ -1,4 +1,4 @@
-use std::{fmt::Display, slice::SliceIndex};
+use std::{borrow::Cow, fmt::Display, slice::SliceIndex};
 
 use crate::keyword::Keyword;
 
@@ -12,7 +12,6 @@ pub(crate) enum TokenKind {
     Dot,
     LeftParen,
     RightParen,
-    BackSlash,
     Comma,
     Unknown,
     Less,
@@ -42,7 +41,6 @@ impl Display for TokenKind {
             TokenKind::Dot => write!(f, "Dot"),
             TokenKind::LeftParen => write!(f, "LeftParen"),
             TokenKind::RightParen => write!(f, "RightParen"),
-            TokenKind::BackSlash => write!(f, "BackSlash"),
             TokenKind::Comma => write!(f, "Comma"),
             TokenKind::Unknown => write!(f, "Unknown"),
             TokenKind::Less => write!(f, "Less"),
@@ -64,30 +62,28 @@ impl Display for TokenKind {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct TokenTable {
+#[derive(Debug)]
+pub(crate) struct TokenTable<'a> {
     pub(crate) tokens: Vec<TokenKind>,
-    pub(crate) positions: Vec<(usize, usize)>,
+    pub(crate) source_ref_list: Vec<Cow<'a, str>>,
 }
 
-impl TokenTable {
-    pub(crate) fn new() -> Self {
+impl<'a> TokenTable<'a> {
+    pub(crate) fn with_source(source: &'a str) -> Self {
+        let cap = source.len() / 4;
         Self {
-            tokens: Vec::new(),
-            positions: Vec::new(),
+            tokens: Vec::with_capacity(cap),
+            source_ref_list: Vec::with_capacity(cap),
         }
     }
 
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
-        Self {
-            tokens: Vec::with_capacity(capacity),
-            positions: Vec::with_capacity(capacity),
-        }
-    }
-
-    pub(crate) fn push(&mut self, kind: TokenKind, start: usize, end: usize) {
+    pub(crate) fn push(&mut self, kind: TokenKind, source_ref: Cow<'a, str>) {
         self.tokens.push(kind);
-        self.positions.push((start, end));
+        self.source_ref_list.push(source_ref);
+    }
+
+    pub(crate) fn source_at(&self, cursor: usize) -> Cow<'a, str> {
+        self.source_ref_list[cursor].clone()
     }
 
     pub(crate) fn get_kind<I>(&self, index: I) -> Option<&I::Output>
@@ -95,16 +91,5 @@ impl TokenTable {
         I: SliceIndex<[TokenKind]>,
     {
         self.tokens.get(index)
-    }
-
-    pub(crate) fn get_position<I>(&self, index: I) -> Option<&I::Output>
-    where
-        I: SliceIndex<[(usize, usize)]>,
-    {
-        self.positions.get(index)
-    }
-
-    pub(crate) fn get_entry(&self, index: usize) -> Option<(&TokenKind, &(usize, usize))> {
-        self.tokens.get(index).zip(self.positions.get(index))
     }
 }

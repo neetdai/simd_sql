@@ -1,4 +1,4 @@
-use crate::{Statement, error::ParserError, keyword::KeywordMap, lexer::Lexer};
+use crate::{Statement, error::ParserError, keyword::KeywordMap, lexer::Lexer, token::TokenTable};
 use simdutf8::basic::from_utf8;
 
 #[derive(Debug)]
@@ -14,18 +14,15 @@ impl Parser {
         })
     }
 
-    pub fn parse(&self, text: &str) -> Result<Statement, ParserError> {
+    pub fn parse<'a>(&'a self, text: &'a str) -> Result<Statement<'a>, ParserError> {
         let text = from_utf8(text.as_bytes())?;
-        let tokentable = {
+        let mut tokentable = TokenTable::with_source(text);
+        {
             let mut lexer = Lexer::new(text, &self.keyword_map)?;
-            lexer.tokenize()?
-        };
+            lexer.tokenize(&mut tokentable)?;
+        }
         let mut cursor = 0;
-        // let select = SelectStatement::new(&tokentable, &mut cursor)?;
         let statement = Statement::new(&tokentable, &mut cursor)?;
-        // dbg!(&select);
-        // dbg!(&statement);
-        // dbg!(&select.where_statement);
         Ok(statement)
     }
 }

@@ -41,23 +41,26 @@ impl PrecedenceTrait for SetOperator {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Query {
-    Select(SelectStatement),
+pub enum Query<'a> {
+    Select(SelectStatement<'a>),
     Cte {
-        ctes: MiniVec<CteBinding>,
-        query: Box<Query>,
+        ctes: MiniVec<CteBinding<'a>>,
+        query: Box<Query<'a>>,
     },
     SetOperation {
         op: SetOperator,
-        left: Box<Query>,
-        right: Box<Query>,
-        order_by: Option<Order>,
-        limit: Option<Limit>,
+        left: Box<Query<'a>>,
+        right: Box<Query<'a>>,
+        order_by: Option<Order<'a>>,
+        limit: Option<Limit<'a>>,
     },
 }
 
-impl Query {
-    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> Query<'a> {
+    pub(crate) fn build(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         let mut query = PrattParser::parse_expression::<Self>(token_table, cursor)?;
 
         if let Self::SetOperation {
@@ -85,7 +88,7 @@ impl Query {
     }
 }
 
-impl PrattParserTrait for Query {
+impl<'a> PrattParserTrait<'a> for Query<'a> {
     type Item = SetOperator;
     type Output = Self;
 
@@ -113,7 +116,7 @@ impl PrattParserTrait for Query {
     }
 
     fn parse_primary(
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self::Output, ParserError> {
         match token_table.get_kind(*cursor) {
@@ -133,14 +136,14 @@ impl PrattParserTrait for Query {
 
     fn parse_postfix(
         left: Self::Output,
-        _token_table: &TokenTable,
+        _token_table: &TokenTable<'a>,
         _cursor: &mut usize,
     ) -> Result<(Self::Output, Flow), ParserError> {
         Ok((left, Flow::Run))
     }
 }
 
-impl PrattOutput<SetOperator> for Query {
+impl<'a> PrattOutput<SetOperator> for Query<'a> {
     fn apply(op: SetOperator, left: Self, right: Self) -> Self {
         Self::SetOperation {
             op,

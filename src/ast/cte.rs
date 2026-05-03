@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use minivec::MiniVec;
 
 use crate::{
@@ -9,22 +11,25 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub struct CteBinding {
-    pub name: usize,
-    pub columns: Option<MiniVec<usize>>,
-    pub query: Box<Query>,
+pub struct CteBinding<'a> {
+    pub name: Cow<'a, str>,
+    pub columns: Option<MiniVec<Cow<'a, str>>>,
+    pub query: Box<Query<'a>>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Cte {
+pub struct Cte<'a> {
     pub recursive: bool,
-    pub bindings: MiniVec<CteBinding>,
+    pub bindings: MiniVec<CteBinding<'a>>,
 }
 
-impl CteBinding {
-    fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> CteBinding<'a> {
+    fn new(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         let name = match token_table.get_kind(*cursor) {
-            Some(TokenKind::Identifier) => *cursor,
+            Some(TokenKind::Identifier) => token_table.source_at(*cursor),
             _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
         };
         *cursor += 1;
@@ -42,7 +47,7 @@ impl CteBinding {
                         break;
                     }
                     Some(TokenKind::Identifier) => {
-                        cols.push(*cursor);
+                        cols.push(token_table.source_at(*cursor));
                         *cursor += 1;
                     }
                     _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
@@ -56,7 +61,6 @@ impl CteBinding {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::As))?;
         *cursor += 1;
 
-        // (SELECT ...) — 支持 UNION 等集合操作
         expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
         *cursor += 1;
         let query = Box::new(Query::build(token_table, cursor)?);
@@ -71,8 +75,11 @@ impl CteBinding {
     }
 }
 
-impl Cte {
-    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> Cte<'a> {
+    pub(crate) fn build(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::With))?;
         *cursor += 1;
 

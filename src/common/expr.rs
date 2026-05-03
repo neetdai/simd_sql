@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use minivec::MiniVec;
 
 use crate::{
@@ -35,7 +37,6 @@ pub enum BinaryOperator {
 }
 
 impl BinaryOperator {
-    /// 从 TokenKind 创建 BinaryOperator
     pub fn from_token_kind(kind: &TokenKind) -> Option<Self> {
         match kind {
             TokenKind::Plus => Some(BinaryOperator::Add),
@@ -60,7 +61,6 @@ impl BinaryOperator {
 }
 
 impl PrecedenceTrait for BinaryOperator {
-    /// 获取运算符的优先级，数值越大优先级越高
     fn precedence(&self) -> usize {
         match self {
             BinaryOperator::Or => 1,
@@ -79,9 +79,8 @@ impl PrecedenceTrait for BinaryOperator {
         }
     }
 
-    /// 判断是否是左结合的运算符
     fn is_left_associative(&self) -> bool {
-        true // 所有二元运算符都是左结合的
+        true
     }
 
     fn min_precedence() -> usize {
@@ -90,123 +89,103 @@ impl PrecedenceTrait for BinaryOperator {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct BinaryOp {
+pub struct BinaryOp<'a> {
     pub op: BinaryOperator,
-    pub left: Expr,
-    pub right: Expr,
+    pub left: Expr<'a>,
+    pub right: Expr<'a>,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Expr {
-    Field(Field),
-    Star(Star),
-    FunctionCall(FunctionCall),
-    StringLiteral(StringLiteral),
-    NumbericLiteral(NumbericLiteral),
-    BinaryOp(Box<BinaryOp>),
-    Between(Between),
-    In(In),
-    Case(CaseExpr),
-    Like(Like),
-    IsNull(IsNull),
-    Exists(Box<ExistsExpr>),
+pub enum Expr<'a> {
+    Field(Field<'a>),
+    Star(Star<'a>),
+    FunctionCall(FunctionCall<'a>),
+    StringLiteral(StringLiteral<'a>),
+    NumericLiteral(NumericLiteral<'a>),
+    BinaryOp(Box<BinaryOp<'a>>),
+    Between(Between<'a>),
+    In(In<'a>),
+    Case(CaseExpr<'a>),
+    Like(Like<'a>),
+    IsNull(IsNull<'a>),
+    Exists(Box<ExistsExpr<'a>>),
     BoolLiteral(bool),
     NullLiteral,
-    WindowFunction(Box<WindowFunction>),
+    WindowFunction(Box<WindowFunction<'a>>),
 }
 
-impl Expr {
+impl<'a> Expr<'a> {
     pub(crate) fn class_field(
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         Field::from_token(token_table, cursor).map(Expr::Field)
     }
 
     pub(crate) fn class_function_call(
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         FunctionCall::from_token(token_table, cursor).map(Expr::FunctionCall)
     }
 
     pub(crate) fn class_string_literal(
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         StringLiteral::from_token(token_table, cursor).map(Expr::StringLiteral)
     }
 
     pub(crate) fn class_number_literal(
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
-        NumbericLiteral::from_token(token_table, cursor).map(Expr::NumbericLiteral)
+        NumericLiteral::from_token(token_table, cursor).map(Expr::NumericLiteral)
     }
 
     pub(crate) fn class_star(
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         Star::from_token(token_table, cursor).map(Expr::Star)
     }
 
-    pub(crate) fn class_between(
-        is_not: bool,
-        field: Box<Expr>,
-        token_table: &TokenTable,
-        cursor: &mut usize,
-    ) -> Result<Self, ParserError> {
-        Between::build(is_not, field, token_table, cursor).map(Expr::Between)
-    }
-
-    pub(crate) fn class_in(
-        is_not: bool,
-        field: Box<Expr>,
-        token_table: &TokenTable,
-        cursor: &mut usize,
-    ) -> Result<Self, ParserError> {
-        In::build(is_not, field, token_table, cursor).map(Expr::In)
-    }
-
-    pub(crate) fn class_case(
-        token_table: &TokenTable,
-        cursor: &mut usize,
-    ) -> Result<Self, ParserError> {
-        CaseExpr::build(token_table, cursor).map(Expr::Case)
-    }
-
-    /// 使用 Pratt Parser 解析表达式
     pub(crate) fn parse_expression(
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         PrattParser::parse_expression::<Self>(token_table, cursor)
     }
 
-    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    pub(crate) fn build(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         Self::parse_expression(token_table, cursor)
     }
 }
 
-impl Aliasable for Expr {
-    fn aliasable(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> Aliasable<'a> for Expr<'a> {
+    fn aliasable(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         Self::build(token_table, cursor)
     }
 }
 
-impl PrattOutput<BinaryOperator> for Expr {
+impl<'a> PrattOutput<BinaryOperator> for Expr<'a> {
     fn apply(op: BinaryOperator, left: Self, right: Self) -> Self {
         Expr::BinaryOp(Box::new(BinaryOp { op, left, right }))
     }
 }
 
-impl PrattParserTrait for Expr {
+impl<'a> PrattParserTrait<'a> for Expr<'a> {
     type Item = BinaryOperator;
     type Output = Self;
 
     fn parse_primary(
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self::Output, ParserError> {
         match token_table.get_kind(*cursor) {
@@ -318,7 +297,7 @@ impl PrattParserTrait for Expr {
 
     fn parse_postfix(
         left: Self::Output,
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<(Self::Output, Flow), ParserError> {
         match token_table.get_kind(*cursor) {
@@ -394,63 +373,44 @@ impl PrattParserTrait for Expr {
     }
 }
 
-trait FromToken {
-    fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError>
-    where
-        Self: Sized;
-}
+impl<'a> Expr<'a> {
+    pub(crate) fn class_between(
+        is_not: bool,
+        field: Box<Expr<'a>>,
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
+        Between::build(is_not, field, token_table, cursor).map(Expr::Between)
+    }
 
-#[derive(Debug, PartialEq)]
-pub struct Alias {
-    name: Option<usize>,
-    value: Expr,
-}
+    pub(crate) fn class_in(
+        is_not: bool,
+        field: Box<Expr<'a>>,
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
+        In::build(is_not, field, token_table, cursor).map(Expr::In)
+    }
 
-impl Alias {
-    pub(crate) fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
-        let value = Expr::build(token_table, cursor)?;
-        match token_table.get_kind(*cursor) {
-            Some(TokenKind::Keyword(Keyword::As)) => {
-                *cursor += 1;
-                if let Some(TokenKind::Identifier) = token_table.get_kind(*cursor) {
-                    let name = *cursor;
-                    *cursor += 1;
-                    Ok(Alias {
-                        name: Some(name),
-                        value,
-                    })
-                } else {
-                    Err(ParserError::SyntaxError(*cursor, *cursor))
-                }
-            }
-            Some(TokenKind::Identifier) => {
-                if let Some(TokenKind::Identifier) = token_table.get_kind(*cursor) {
-                    let name = *cursor;
-                    *cursor += 1;
-                    Ok(Alias {
-                        name: Some(name),
-                        value,
-                    })
-                } else {
-                    Ok(Alias { name: None, value })
-                }
-            }
-            _ => Ok(Alias { name: None, value }),
-        }
+    pub(crate) fn class_case(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
+        CaseExpr::build(token_table, cursor).map(Expr::Case)
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Field {
-    pub(crate) prefix: Option<usize>,
-    pub(crate) value: usize,
+pub struct Field<'a> {
+    pub prefix: Option<Cow<'a, str>>,
+    pub name: Cow<'a, str>,
 }
 
-impl FromToken for Field {
-    fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError>
-    where
-        Self: Sized,
-    {
+impl<'a> Field<'a> {
+    pub(crate) fn from_token(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         let first = token_table
             .get_kind(*cursor)
             .map(|kind| kind == &TokenKind::Identifier)
@@ -464,43 +424,35 @@ impl FromToken for Field {
             .map(|kind| kind == &TokenKind::Identifier)
             .unwrap_or(false);
 
-        let (prefix, value, sum) = match (first, dot, second) {
-            (true, false, _) => (None, *cursor, 1),
-            (true, true, true) => (Some(*cursor), *cursor + 2, 3),
+        let (prefix, name, sum) = match (first, dot, second) {
+            (true, false, _) => {
+                let name = token_table.source_at(*cursor);
+                (None, name, 1)
+            }
+            (true, true, true) => {
+                let prefix = token_table.source_at(*cursor);
+                let name = token_table.source_at(*cursor + 2);
+                (Some(prefix), name, 3)
+            }
             _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
         };
 
         *cursor += sum;
 
-        Ok(Self { prefix, value })
-
-        // match token_table.get_entry(*cursor) {
-        //     Some((TokenKind::Identifier, (current_start, current_end))) => {
-        //         *cursor += 1;
-        //         if let Some([TokenKind::Dot, TokenKind::Identifier]) = token_table.get_kind(*cursor..=*cursor + 1) {
-        //             *cursor += 1;
-        //             let (start, end) = token_table.get_position(*cursor).unwrap();
-        //             *cursor += 1;
-        //             Ok(Self { prefix: Some((*current_start, *current_end)), value: (*start, *end) })
-        //         } else {
-        //             Ok(Self { prefix: None, value: (*current_start, *current_end) })
-        //         }
-        //     }
-        //     _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
-        // }
+        Ok(Self { prefix, name })
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Star {
-    pub prefix: Option<usize>,
+pub struct Star<'a> {
+    pub prefix: Option<Cow<'a, str>>,
 }
 
-impl FromToken for Star {
-    fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError>
-    where
-        Self: Sized,
-    {
+impl<'a> Star<'a> {
+    pub(crate) fn from_token(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         let first = token_table
             .get_kind(*cursor)
             .map(|kind| kind == &TokenKind::Identifier)
@@ -522,7 +474,7 @@ impl FromToken for Star {
             *cursor += 1;
             Ok(Self { prefix: None })
         } else if first && dot && second {
-            let prefix = *cursor;
+            let prefix = token_table.source_at(*cursor);
             *cursor += 3;
             Ok(Self {
                 prefix: Some(prefix),
@@ -534,17 +486,17 @@ impl FromToken for Star {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct FunctionCall {
-    name: usize,
-    args: MiniVec<Expr>,
-    distinct: bool,
+pub struct FunctionCall<'a> {
+    pub name: Cow<'a, str>,
+    pub args: MiniVec<Expr<'a>>,
+    pub distinct: bool,
 }
 
-impl FromToken for FunctionCall {
-    fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError>
-    where
-        Self: Sized,
-    {
+impl<'a> FunctionCall<'a> {
+    pub(crate) fn from_token(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         let first = token_table
             .get_kind(*cursor)
             .map(|kind| kind == &TokenKind::Identifier)
@@ -558,7 +510,7 @@ impl FromToken for FunctionCall {
             return Err(ParserError::SyntaxError(*cursor, *cursor));
         }
 
-        let name_pos = *cursor;
+        let name = token_table.source_at(*cursor);
         *cursor += 2;
 
         let distinct =
@@ -597,56 +549,25 @@ impl FromToken for FunctionCall {
         }
 
         Ok(Self {
-            name: name_pos,
+            name,
             args,
             distinct,
         })
-
-        // if let Some((TokenKind::Identifier, (start, end))) = token_table.get_entry(*cursor) {
-        //     *cursor += 1;
-        //     let name = (*start, *end);
-
-        //     expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
-        //     *cursor += 1;
-
-        //     let mut args = MiniVec::with_capacity(8);
-        //     loop {
-        //         let expr = Expr::build(token_table, cursor)?;
-        //         args.push(expr);
-
-        //         if let Some(TokenKind::Comma) = token_table.get_kind(*cursor) {
-        //             *cursor += 1;
-        //             continue;
-        //         } else if let Some(TokenKind::RightParen) = token_table.get_kind(*cursor) {
-        //             *cursor += 1;
-        //             break;
-        //         } else {
-        //             return Err(ParserError::SyntaxError(*cursor, *cursor));
-        //         }
-        //     }
-
-        //     Ok(Self {
-        //         name: name,
-        //         args,
-        //     })
-        // } else {
-        //     return Err(ParserError::SyntaxError(*cursor, *cursor));
-        // }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct StringLiteral {
-    value: usize,
+pub struct StringLiteral<'a> {
+    pub value: Cow<'a, str>,
 }
 
-impl FromToken for StringLiteral {
-    fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError>
-    where
-        Self: Sized,
-    {
+impl<'a> StringLiteral<'a> {
+    pub(crate) fn from_token(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         if let Some(TokenKind::StringLiteral) = token_table.get_kind(*cursor) {
-            let value = *cursor;
+            let value = token_table.source_at(*cursor);
             *cursor += 1;
             Ok(Self { value })
         } else {
@@ -656,17 +577,17 @@ impl FromToken for StringLiteral {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct NumbericLiteral {
-    value: usize,
+pub struct NumericLiteral<'a> {
+    pub value: Cow<'a, str>,
 }
 
-impl FromToken for NumbericLiteral {
-    fn from_token(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError>
-    where
-        Self: Sized,
-    {
+impl<'a> NumericLiteral<'a> {
+    pub(crate) fn from_token(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         if let Some(TokenKind::Number) = token_table.get_kind(*cursor) {
-            let value = *cursor;
+            let value = token_table.source_at(*cursor);
             *cursor += 1;
             Ok(Self { value })
         } else {
@@ -676,37 +597,28 @@ impl FromToken for NumbericLiteral {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Between {
+pub struct Between<'a> {
     pub is_not: bool,
-    pub field: Box<Expr>,
-    pub lower: Box<Expr>,
-    pub upper: Box<Expr>,
+    pub field: Box<Expr<'a>>,
+    pub lower: Box<Expr<'a>>,
+    pub upper: Box<Expr<'a>>,
 }
 
-impl Between {
+impl<'a> Between<'a> {
     pub(crate) fn build(
         is_not: bool,
-        field: Box<Expr>,
-        token_table: &TokenTable,
+        field: Box<Expr<'a>>,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Between))?;
         *cursor += 1;
 
-        //
         let lower = Box::new(Expr::parse_primary(token_table, cursor)?);
 
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::And))?;
         *cursor += 1;
 
-        // let upper = match token_table.get_kind(*cursor) {
-        //     Some(TokenKind::Identifier) => Box::new(Expr::class_field(token_table, cursor)?),
-        //     Some(TokenKind::Number) => Box::new(Expr::class_number_literal(token_table, cursor)?),
-        //     Some(TokenKind::StringLiteral) => {
-        //         Box::new(Expr::class_string_literal(token_table, cursor)?)
-        //     }
-        //     _ => return Err(ParserError::SyntaxError(*cursor, *cursor)),
-        // };
         let upper = Box::new(Expr::parse_primary(token_table, cursor)?);
 
         Ok(Self {
@@ -719,23 +631,23 @@ impl Between {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct In {
+pub struct In<'a> {
     pub is_not: bool,
-    pub field: Box<Expr>,
-    pub in_value: InValue,
+    pub field: Box<Expr<'a>>,
+    pub in_value: InValue<'a>,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum InValue {
-    List(MiniVec<Expr>),
-    Subquery(SubSelectStatement),
+pub enum InValue<'a> {
+    List(MiniVec<Expr<'a>>),
+    Subquery(SubSelectStatement<'a>),
 }
 
-impl In {
+impl<'a> In<'a> {
     pub(crate) fn build(
         is_not: bool,
-        field: Box<Expr>,
-        token_table: &TokenTable,
+        field: Box<Expr<'a>>,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::In))?;
@@ -787,17 +699,17 @@ impl In {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Like {
+pub struct Like<'a> {
     pub is_not: bool,
-    pub field: Box<Expr>,
-    pub pattern: Box<Expr>,
+    pub field: Box<Expr<'a>>,
+    pub pattern: Box<Expr<'a>>,
 }
 
-impl Like {
+impl<'a> Like<'a> {
     pub(crate) fn build(
         is_not: bool,
-        field: Box<Expr>,
-        token_table: &TokenTable,
+        field: Box<Expr<'a>>,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Like))?;
@@ -814,34 +726,21 @@ impl Like {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct IsNull {
+pub struct IsNull<'a> {
     pub is_not: bool,
-    pub field: Box<Expr>,
-}
-
-impl IsNull {
-    pub(crate) fn build(
-        is_not: bool,
-        field: Box<Expr>,
-        token_table: &TokenTable,
-        cursor: &mut usize,
-    ) -> Result<Self, ParserError> {
-        expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Is))?;
-        *cursor += 1;
-        Ok(Self { is_not, field })
-    }
+    pub field: Box<Expr<'a>>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ExistsExpr {
+pub struct ExistsExpr<'a> {
     pub is_not: bool,
-    pub subquery: SubSelectStatement,
+    pub subquery: SubSelectStatement<'a>,
 }
 
-impl ExistsExpr {
+impl<'a> ExistsExpr<'a> {
     pub(crate) fn build(
         is_not: bool,
-        token_table: &TokenTable,
+        token_table: &TokenTable<'a>,
         cursor: &mut usize,
     ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Exists))?;
@@ -859,13 +758,16 @@ impl ExistsExpr {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct WindowSpec {
-    pub partition_by: Option<MiniVec<Expr>>,
-    pub order_by: Option<Order>,
+pub struct WindowSpec<'a> {
+    pub partition_by: Option<MiniVec<Expr<'a>>>,
+    pub order_by: Option<Order<'a>>,
 }
 
-impl WindowSpec {
-    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> WindowSpec<'a> {
+    pub(crate) fn build(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
         *cursor += 1;
 
@@ -913,26 +815,29 @@ impl WindowSpec {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct WindowFunction {
-    pub function: FunctionCall,
-    pub window_spec: WindowSpec,
+pub struct WindowFunction<'a> {
+    pub function: FunctionCall<'a>,
+    pub window_spec: WindowSpec<'a>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct CaseExpr {
-    pub condition: Option<Box<Expr>>,
-    pub when_clauses: MiniVec<WhenClause>,
-    pub else_result: Option<Box<Expr>>,
+pub struct CaseExpr<'a> {
+    pub condition: Option<Box<Expr<'a>>>,
+    pub when_clauses: MiniVec<WhenClause<'a>>,
+    pub else_result: Option<Box<Expr<'a>>>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct WhenClause {
-    pub condition: Box<Expr>,
-    pub result: Box<Expr>,
+pub struct WhenClause<'a> {
+    pub condition: Box<Expr<'a>>,
+    pub result: Box<Expr<'a>>,
 }
 
-impl CaseExpr {
-    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> CaseExpr<'a> {
+    pub(crate) fn build(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Case))?;
         *cursor += 1;
 
@@ -982,6 +887,8 @@ impl CaseExpr {
 
 #[cfg(test)]
 mod test {
+    use std::borrow::Cow;
+
     use minivec::mini_vec;
 
     use crate::{
@@ -989,68 +896,88 @@ mod test {
         common::{
             alias::Alias,
             expr::{
-                BinaryOp, BinaryOperator, Expr, Field, FunctionCall, In, InValue, IsNull,
-                NumbericLiteral, Star, StringLiteral,
+                BinaryOp, BinaryOperator, Expr, Field, FunctionCall, IsNull, NumericLiteral, Star,
+                StringLiteral,
             },
         },
         keyword::Keyword,
         token::{TokenKind, TokenTable},
     };
 
+    fn make_table<'a>(source: &'a str, entries: Vec<(TokenKind, usize, usize)>) -> TokenTable<'a> {
+        let mut table = TokenTable::with_source(source);
+        for (kind, start, end) in entries {
+            table.push(kind, String::from_utf8_lossy(&source.as_bytes()[start..= end]));
+        }
+        table
+    }
+
     #[test]
     fn test_column() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1); // prefix
-        token_table.push(TokenKind::Dot, 2, 2);
-        token_table.push(TokenKind::Identifier, 3, 4); // value
-
+        let source = "ab.cd";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Identifier, 0, 1),
+                (TokenKind::Dot, 2, 2),
+                (TokenKind::Identifier, 3, 4),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::class_field(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::Field(Field {
-                prefix: Some(0),
-                value: 2,
+                prefix: Some(Cow::Borrowed("ab")),
+                name: Cow::Borrowed("cd"),
             })
         );
         assert_eq!(cursor, 3);
 
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1); // prefix
-        token_table.push(TokenKind::Dot, 2, 2);
-        token_table.push(TokenKind::Identifier, 3, 4); // value
-        token_table.push(TokenKind::Keyword(Keyword::As), 5, 6); // As
-        token_table.push(TokenKind::Identifier, 7, 8); // alias
-
+        let source2 = "ab.cd as e";
+        let token_table2 = make_table(
+            source2,
+            vec![
+                (TokenKind::Identifier, 0, 1),
+                (TokenKind::Dot, 2, 2),
+                (TokenKind::Identifier, 3, 4),
+                (TokenKind::Keyword(Keyword::As), 6, 7),
+                (TokenKind::Identifier, 9, 9),
+            ],
+        );
         let mut cursor = 0;
-        let expr = Alias::new(&token_table, &mut cursor).unwrap();
+        let alias = Alias::new(&token_table2, &mut cursor).unwrap();
         assert_eq!(
-            expr,
+            alias,
             Alias {
-                name: Some(4),
+                name: Some(Cow::Borrowed("e")),
                 value: Expr::Field(Field {
-                    prefix: Some(0),
-                    value: 2,
+                    prefix: Some(Cow::Borrowed("ab")),
+                    name: Cow::Borrowed("cd"),
                 })
             }
         );
         assert_eq!(cursor, 5);
 
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1); // prefix
-        token_table.push(TokenKind::Dot, 2, 2);
-        token_table.push(TokenKind::Identifier, 3, 4); // value
-        token_table.push(TokenKind::Identifier, 5, 6); // alias
-
+        let source3 = "ab.cd e";
+        let token_table3 = make_table(
+            source3,
+            vec![
+                (TokenKind::Identifier, 0, 1),
+                (TokenKind::Dot, 2, 2),
+                (TokenKind::Identifier, 3, 4),
+                (TokenKind::Identifier, 6, 6),
+            ],
+        );
         let mut cursor = 0;
-        let expr = Alias::new(&token_table, &mut cursor).unwrap();
+        let alias2 = Alias::new(&token_table3, &mut cursor).unwrap();
         assert_eq!(
-            expr,
+            alias2,
             Alias {
-                name: Some(3),
+                name: Some(Cow::Borrowed("e")),
                 value: Expr::Field(Field {
-                    prefix: Some(0),
-                    value: 2,
+                    prefix: Some(Cow::Borrowed("ab")),
+                    name: Cow::Borrowed("cd"),
                 })
             }
         );
@@ -1059,20 +986,26 @@ mod test {
 
     #[test]
     fn test_function() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1); // name
-        token_table.push(TokenKind::LeftParen, 2, 2);
-        token_table.push(TokenKind::StringLiteral, 3, 5);
-        token_table.push(TokenKind::RightParen, 6, 6); // args
-
+        let source = "foo('hello')";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Identifier, 0, 2),
+                (TokenKind::LeftParen, 3, 3),
+                (TokenKind::StringLiteral, 4, 10),
+                (TokenKind::RightParen, 11, 11),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::FunctionCall(FunctionCall {
                 distinct: false,
-                name: 0,
-                args: mini_vec![Expr::StringLiteral(StringLiteral { value: 2 })]
+                name: Cow::Borrowed("foo"),
+                args: mini_vec![Expr::StringLiteral(StringLiteral {
+                    value: Cow::Borrowed("'hello'"),
+                })]
             })
         );
         assert_eq!(cursor, 4);
@@ -1080,23 +1013,27 @@ mod test {
 
     #[test]
     fn test_function_1() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1); // name
-        token_table.push(TokenKind::LeftParen, 2, 2);
-        token_table.push(TokenKind::StringLiteral, 3, 5);
-        token_table.push(TokenKind::Comma, 6, 6);
-        token_table.push(TokenKind::StringLiteral, 7, 8);
-        token_table.push(TokenKind::RightParen, 9, 9); // args
-
+        let source = "bar('x', 'y')";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Identifier, 0, 2),
+                (TokenKind::LeftParen, 3, 3),
+                (TokenKind::StringLiteral, 4, 6),
+                (TokenKind::Comma, 7, 7),
+                (TokenKind::StringLiteral, 9, 11),
+                (TokenKind::RightParen, 12, 12),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::FunctionCall(FunctionCall {
-                name: 0,
+                name: Cow::Borrowed("bar"),
                 args: mini_vec![
-                    Expr::StringLiteral(StringLiteral { value: 2 }),
-                    Expr::StringLiteral(StringLiteral { value: 4 })
+                    Expr::StringLiteral(StringLiteral { value: Cow::Borrowed("'x'") }),
+                    Expr::StringLiteral(StringLiteral { value: Cow::Borrowed("'y'") }),
                 ],
                 distinct: false,
             })
@@ -1106,13 +1043,17 @@ mod test {
 
     #[test]
     fn test_function_should_panic_1() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1); // name
-        token_table.push(TokenKind::LeftParen, 2, 2);
-        token_table.push(TokenKind::StringLiteral, 3, 5);
-        token_table.push(TokenKind::Comma, 6, 6);
-        token_table.push(TokenKind::RightParen, 7, 7); // args
-
+        let source = "f('x', )";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Identifier, 0, 0),
+                (TokenKind::LeftParen, 1, 1),
+                (TokenKind::StringLiteral, 2, 4),
+                (TokenKind::Comma, 5, 5),
+                (TokenKind::RightParen, 6, 6),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::class_function_call(&token_table, &mut cursor);
         assert_eq!(expr, Err(ParserError::SyntaxError(4, 4)));
@@ -1120,24 +1061,28 @@ mod test {
 
     #[test]
     fn test_binary_operator_1() {
-        let mut token_table = TokenTable::with_capacity(7);
-        token_table.push(TokenKind::Number, 0, 0); // left
-        token_table.push(TokenKind::Plus, 1, 1); // +
-        token_table.push(TokenKind::Number, 2, 2); // right
-        token_table.push(TokenKind::Multiply, 3, 3); // *
-        token_table.push(TokenKind::Number, 4, 4); // right
-
+        let source = "1 + 2 * 3";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Number, 0, 0),
+                (TokenKind::Plus, 2, 2),
+                (TokenKind::Number, 4, 4),
+                (TokenKind::Multiply, 6, 6),
+                (TokenKind::Number, 8, 8),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::build(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::BinaryOp(Box::new(BinaryOp {
                 op: BinaryOperator::Add,
-                left: Expr::NumbericLiteral(NumbericLiteral { value: 0 }),
+                left: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("1") }),
                 right: Expr::BinaryOp(Box::new(BinaryOp {
                     op: BinaryOperator::Multiply,
-                    left: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
-                    right: Expr::NumbericLiteral(NumbericLiteral { value: 4 }),
+                    left: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("2") }),
+                    right: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("3") }),
                 })),
             }))
         );
@@ -1146,13 +1091,17 @@ mod test {
 
     #[test]
     fn test_build_binary_op_2() {
-        let mut token_table = TokenTable::with_capacity(7);
-        token_table.push(TokenKind::Number, 0, 0); // left
-        token_table.push(TokenKind::Multiply, 1, 1); // +
-        token_table.push(TokenKind::Number, 2, 2); // right
-        token_table.push(TokenKind::Plus, 3, 3); // *
-        token_table.push(TokenKind::Number, 4, 4); // right
-
+        let source = "1 * 2 + 3";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Number, 0, 0),
+                (TokenKind::Multiply, 2, 2),
+                (TokenKind::Number, 4, 4),
+                (TokenKind::Plus, 6, 6),
+                (TokenKind::Number, 8, 8),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::build(&token_table, &mut cursor).unwrap();
         assert_eq!(
@@ -1161,10 +1110,10 @@ mod test {
                 op: BinaryOperator::Add,
                 left: Expr::BinaryOp(Box::new(BinaryOp {
                     op: BinaryOperator::Multiply,
-                    left: Expr::NumbericLiteral(NumbericLiteral { value: 0 }),
-                    right: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
+                    left: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("1") }),
+                    right: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("2") }),
                 })),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 4 }),
+                right: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("3") }),
             }))
         );
         assert_eq!(cursor, 5);
@@ -1172,15 +1121,19 @@ mod test {
 
     #[test]
     fn test_build_binary_op_3() {
-        let mut token_table = TokenTable::with_capacity(7);
-        token_table.push(TokenKind::LeftParen, 0, 0); // left
-        token_table.push(TokenKind::Number, 1, 1); // left
-        token_table.push(TokenKind::Plus, 2, 2); // +
-        token_table.push(TokenKind::Number, 3, 3); // right
-        token_table.push(TokenKind::RightParen, 4, 4); // right
-        token_table.push(TokenKind::Multiply, 5, 5); // *
-        token_table.push(TokenKind::Number, 6, 6); // right
-
+        let source = "(1 + 2) * 3";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::LeftParen, 0, 0),
+                (TokenKind::Number, 1, 1),
+                (TokenKind::Plus, 3, 3),
+                (TokenKind::Number, 5, 5),
+                (TokenKind::RightParen, 6, 6),
+                (TokenKind::Multiply, 8, 8),
+                (TokenKind::Number, 10, 10),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::build(&token_table, &mut cursor).unwrap();
         assert_eq!(
@@ -1189,10 +1142,10 @@ mod test {
                 op: BinaryOperator::Multiply,
                 left: Expr::BinaryOp(Box::new(BinaryOp {
                     op: BinaryOperator::Add,
-                    left: Expr::NumbericLiteral(NumbericLiteral { value: 1 }),
-                    right: Expr::NumbericLiteral(NumbericLiteral { value: 3 }),
+                    left: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("1") }),
+                    right: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("2") }),
                 })),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 6 }),
+                right: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("3") }),
             }))
         );
         assert_eq!(cursor, 7);
@@ -1200,47 +1153,59 @@ mod test {
 
     #[test]
     fn test_binary_operator_all_arithmetic() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Number, 0, 0);
-        token_table.push(TokenKind::Divide, 1, 1);
-        token_table.push(TokenKind::Number, 2, 2);
-
+        let source = "1 / 2";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Number, 0, 0),
+                (TokenKind::Divide, 2, 2),
+                (TokenKind::Number, 4, 4),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::build(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::BinaryOp(Box::new(BinaryOp {
                 op: BinaryOperator::Divide,
-                left: Expr::NumbericLiteral(NumbericLiteral { value: 0 }),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
+                left: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("1") }),
+                right: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("2") }),
             }))
         );
         assert_eq!(cursor, 3);
 
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Number, 0, 0);
-        token_table.push(TokenKind::Mod, 1, 1);
-        token_table.push(TokenKind::Number, 2, 2);
-
+        let source2 = "1 % 2";
+        let token_table2 = make_table(
+            source2,
+            vec![
+                (TokenKind::Number, 0, 0),
+                (TokenKind::Mod, 2, 2),
+                (TokenKind::Number, 4, 4),
+            ],
+        );
         let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
+        let expr = Expr::build(&token_table2, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::BinaryOp(Box::new(BinaryOp {
                 op: BinaryOperator::Mod,
-                left: Expr::NumbericLiteral(NumbericLiteral { value: 0 }),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
+                left: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("1") }),
+                right: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("2") }),
             }))
         );
     }
 
     #[test]
     fn test_binary_operator_comparison() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1);
-        token_table.push(TokenKind::Equal, 2, 2);
-        token_table.push(TokenKind::Number, 3, 3);
-
+        let source_eq = "id = 1";
+        let token_table = make_table(
+            source_eq,
+            vec![
+                (TokenKind::Identifier, 0, 1),
+                (TokenKind::Equal, 3, 3),
+                (TokenKind::Number, 5, 5),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::build(&token_table, &mut cursor).unwrap();
         assert_eq!(
@@ -1249,99 +1214,50 @@ mod test {
                 op: BinaryOperator::Equal,
                 left: Expr::Field(Field {
                     prefix: None,
-                    value: 0
+                    name: Cow::Borrowed("id")
                 }),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
+                right: Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("1") }),
             }))
         );
         assert_eq!(cursor, 3);
 
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1);
-        token_table.push(TokenKind::NotEqual, 2, 2);
-        token_table.push(TokenKind::StringLiteral, 3, 5);
-
+        let source_ne = "id <> 'x'";
+        let token_table2 = make_table(
+            source_ne,
+            vec![
+                (TokenKind::Identifier, 0, 1),
+                (TokenKind::NotEqual, 3, 4),
+                (TokenKind::StringLiteral, 6, 8),
+            ],
+        );
         let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
+        let expr = Expr::build(&token_table2, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::BinaryOp(Box::new(BinaryOp {
                 op: BinaryOperator::NotEqual,
                 left: Expr::Field(Field {
                     prefix: None,
-                    value: 0
+                    name: Cow::Borrowed("id")
                 }),
-                right: Expr::StringLiteral(StringLiteral { value: 2 }),
-            }))
-        );
-
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1);
-        token_table.push(TokenKind::Greater, 2, 2);
-        token_table.push(TokenKind::Number, 3, 3);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            expr,
-            Expr::BinaryOp(Box::new(BinaryOp {
-                op: BinaryOperator::Greater,
-                left: Expr::Field(Field {
-                    prefix: None,
-                    value: 0
-                }),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
-            }))
-        );
-
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1);
-        token_table.push(TokenKind::LessEqual, 2, 2);
-        token_table.push(TokenKind::Number, 3, 3);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            expr,
-            Expr::BinaryOp(Box::new(BinaryOp {
-                op: BinaryOperator::LessEqual,
-                left: Expr::Field(Field {
-                    prefix: None,
-                    value: 0
-                }),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
-            }))
-        );
-
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1);
-        token_table.push(TokenKind::GreaterEqual, 2, 2);
-        token_table.push(TokenKind::Number, 3, 3);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            expr,
-            Expr::BinaryOp(Box::new(BinaryOp {
-                op: BinaryOperator::GreaterEqual,
-                left: Expr::Field(Field {
-                    prefix: None,
-                    value: 0
-                }),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
+                right: Expr::StringLiteral(StringLiteral { value: Cow::Borrowed("'x'") }),
             }))
         );
     }
 
     #[test]
     fn test_binary_operator_logical() {
-        let mut token_table = TokenTable::with_capacity(5);
-        token_table.push(TokenKind::Identifier, 0, 1);
-        token_table.push(TokenKind::Keyword(Keyword::And), 2, 4);
-        token_table.push(TokenKind::Identifier, 5, 6);
-        token_table.push(TokenKind::Keyword(Keyword::Or), 7, 8);
-        token_table.push(TokenKind::Identifier, 9, 10);
-
+        let source = "a AND b OR c";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Identifier, 0, 0),
+                (TokenKind::Keyword(Keyword::And), 2, 4),
+                (TokenKind::Identifier, 6, 6),
+                (TokenKind::Keyword(Keyword::Or), 8, 9),
+                (TokenKind::Identifier, 11, 11),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::build(&token_table, &mut cursor).unwrap();
         assert_eq!(
@@ -1352,16 +1268,16 @@ mod test {
                     op: BinaryOperator::And,
                     left: Expr::Field(Field {
                         prefix: None,
-                        value: 0
+                        name: Cow::Borrowed("a")
                     }),
                     right: Expr::Field(Field {
                         prefix: None,
-                        value: 2
+                        name: Cow::Borrowed("b")
                     }),
                 })),
                 right: Expr::Field(Field {
                     prefix: None,
-                    value: 4
+                    name: Cow::Borrowed("c")
                 }),
             }))
         );
@@ -1370,59 +1286,67 @@ mod test {
 
     #[test]
     fn test_string_literal() {
-        let mut token_table = TokenTable::with_capacity(1);
-        token_table.push(TokenKind::StringLiteral, 0, 10);
-
+        let source = "'hello'";
+        let token_table = make_table(source, vec![(TokenKind::StringLiteral, 0, 6)]);
         let mut cursor = 0;
         let expr = Expr::class_string_literal(&token_table, &mut cursor).unwrap();
-        assert_eq!(expr, Expr::StringLiteral(StringLiteral { value: 0 }));
+        assert_eq!(
+            expr,
+            Expr::StringLiteral(StringLiteral {
+                value: Cow::Borrowed("'hello'")
+            })
+        );
         assert_eq!(cursor, 1);
     }
 
     #[test]
     fn test_number_literal() {
-        let mut token_table = TokenTable::with_capacity(1);
-        token_table.push(TokenKind::Number, 0, 5);
-
+        let source = "12345";
+        let token_table = make_table(source, vec![(TokenKind::Number, 0, 4)]);
         let mut cursor = 0;
         let expr = Expr::class_number_literal(&token_table, &mut cursor).unwrap();
-        assert_eq!(expr, Expr::NumbericLiteral(NumbericLiteral { value: 0 }));
+        assert_eq!(
+            expr,
+            Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("12345") })
+        );
         assert_eq!(cursor, 1);
     }
 
     #[test]
     fn test_star() {
-        let mut token_table = TokenTable::with_capacity(1);
-        token_table.push(TokenKind::Multiply, 0, 0);
-
+        let source = "*";
+        let token_table = make_table(source, vec![(TokenKind::Multiply, 0, 0)]);
         let mut cursor = 0;
         let expr = Expr::class_star(&token_table, &mut cursor).unwrap();
         assert_eq!(expr, Expr::Star(Star { prefix: None }));
         assert_eq!(cursor, 1);
 
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 1);
-        token_table.push(TokenKind::Dot, 2, 2);
-        token_table.push(TokenKind::Multiply, 3, 3);
-
+        let source2 = "t.*";
+        let token_table2 = make_table(
+            source2,
+            vec![
+                (TokenKind::Identifier, 0, 0),
+                (TokenKind::Dot, 1, 1),
+                (TokenKind::Multiply, 2, 2),
+            ],
+        );
         let mut cursor = 0;
-        let expr = Expr::class_star(&token_table, &mut cursor).unwrap();
-        assert_eq!(expr, Expr::Star(Star { prefix: Some(0) }));
+        let expr = Expr::class_star(&token_table2, &mut cursor).unwrap();
+        assert_eq!(expr, Expr::Star(Star { prefix: Some(Cow::Borrowed("t")) }));
         assert_eq!(cursor, 3);
     }
 
     #[test]
     fn test_field_simple() {
-        let mut token_table = TokenTable::with_capacity(1);
-        token_table.push(TokenKind::Identifier, 0, 5);
-
+        let source = "col1";
+        let token_table = make_table(source, vec![(TokenKind::Identifier, 0, 3)]);
         let mut cursor = 0;
         let expr = Expr::class_field(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::Field(Field {
                 prefix: None,
-                value: 0
+                name: Cow::Borrowed("col1")
             })
         );
         assert_eq!(cursor, 1);
@@ -1430,18 +1354,22 @@ mod test {
 
     #[test]
     fn test_field_with_prefix() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::Dot, 4, 4);
-        token_table.push(TokenKind::Identifier, 5, 8);
-
+        let source = "usr.id";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Identifier, 0, 2),
+                (TokenKind::Dot, 3, 3),
+                (TokenKind::Identifier, 4, 5),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::class_field(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::Field(Field {
-                prefix: Some(0),
-                value: 2
+                prefix: Some(Cow::Borrowed("usr")),
+                name: Cow::Borrowed("id")
             })
         );
         assert_eq!(cursor, 3);
@@ -1449,551 +1377,41 @@ mod test {
 
     #[test]
     fn test_field_invalid() {
-        let mut token_table = TokenTable::with_capacity(2);
-        token_table.push(TokenKind::Number, 0, 1);
-        token_table.push(TokenKind::Identifier, 2, 3);
-
+        let source = "5 x";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Number, 0, 0),
+                (TokenKind::Identifier, 2, 2),
+            ],
+        );
         let mut cursor = 0;
         let result = Expr::class_field(&token_table, &mut cursor);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_function_multiple_args() {
-        let mut token_table = TokenTable::with_capacity(9);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::LeftParen, 4, 4);
-        token_table.push(TokenKind::Number, 5, 5);
-        token_table.push(TokenKind::Comma, 6, 6);
-        token_table.push(TokenKind::Identifier, 7, 8);
-        token_table.push(TokenKind::Comma, 9, 9);
-        token_table.push(TokenKind::StringLiteral, 10, 15);
-        token_table.push(TokenKind::Comma, 16, 16);
-        token_table.push(TokenKind::Number, 17, 20);
-        token_table.push(TokenKind::RightParen, 21, 21);
-
-        let mut cursor = 0;
-        let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            expr,
-            Expr::FunctionCall(FunctionCall {
-                distinct: false,
-                name: 0,
-                args: mini_vec![
-                    Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
-                    Expr::Field(Field {
-                        prefix: None,
-                        value: 4
-                    }),
-                    Expr::StringLiteral(StringLiteral { value: 6 }),
-                    Expr::NumbericLiteral(NumbericLiteral { value: 8 }),
-                ]
-            })
-        );
-        assert_eq!(cursor, 10);
-    }
-
-    #[test]
     fn test_function_distinct() {
-        let mut token_table = TokenTable::with_capacity(6);
-        token_table.push(TokenKind::Identifier, 0, 0);
-        token_table.push(TokenKind::LeftParen, 1, 1);
-        token_table.push(TokenKind::Keyword(Keyword::Distinct), 2, 2);
-        token_table.push(TokenKind::Number, 3, 4);
-        token_table.push(TokenKind::RightParen, 5, 5);
-
+        let source = "c(DISTINCT 3)";
+        let token_table = make_table(
+            source,
+            vec![
+                (TokenKind::Identifier, 0, 0),
+                (TokenKind::LeftParen, 1, 1),
+                (TokenKind::Keyword(Keyword::Distinct), 2, 2),
+                (TokenKind::Number, 11, 11),
+                (TokenKind::RightParen, 12, 12),
+            ],
+        );
         let mut cursor = 0;
         let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
         assert_eq!(
             expr,
             Expr::FunctionCall(FunctionCall {
                 distinct: true,
-                name: 0,
-                args: mini_vec![Expr::NumbericLiteral(NumbericLiteral { value: 3 })]
+                name: Cow::Borrowed("c"),
+                args: mini_vec![Expr::NumericLiteral(NumericLiteral { value: Cow::Borrowed("3") })]
             })
         );
-    }
-
-    #[test]
-    fn test_parenthesized_expression() {
-        let mut token_table = TokenTable::with_capacity(7);
-        token_table.push(TokenKind::LeftParen, 0, 0);
-        token_table.push(TokenKind::Number, 1, 1);
-        token_table.push(TokenKind::Plus, 2, 2);
-        token_table.push(TokenKind::Number, 3, 3);
-        token_table.push(TokenKind::RightParen, 4, 4);
-        token_table.push(TokenKind::Multiply, 5, 5);
-        token_table.push(TokenKind::Number, 6, 6);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            expr,
-            Expr::BinaryOp(Box::new(BinaryOp {
-                op: BinaryOperator::Multiply,
-                left: Expr::BinaryOp(Box::new(BinaryOp {
-                    op: BinaryOperator::Add,
-                    left: Expr::NumbericLiteral(NumbericLiteral { value: 1 }),
-                    right: Expr::NumbericLiteral(NumbericLiteral { value: 3 }),
-                })),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 6 }),
-            }))
-        );
-    }
-
-    #[test]
-    fn test_complex_expression() {
-        let mut token_table = TokenTable::with_capacity(15);
-        token_table.push(TokenKind::Identifier, 0, 1);
-        token_table.push(TokenKind::Multiply, 2, 2);
-        token_table.push(TokenKind::LeftParen, 3, 3);
-        token_table.push(TokenKind::Number, 4, 4);
-        token_table.push(TokenKind::Plus, 5, 5);
-        token_table.push(TokenKind::Number, 6, 6);
-        token_table.push(TokenKind::RightParen, 7, 7);
-        token_table.push(TokenKind::Keyword(Keyword::And), 8, 10);
-        token_table.push(TokenKind::Identifier, 11, 12);
-        token_table.push(TokenKind::Greater, 13, 13);
-        token_table.push(TokenKind::Number, 14, 14);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            expr,
-            Expr::BinaryOp(Box::new(BinaryOp {
-                op: BinaryOperator::And,
-                left: Expr::BinaryOp(Box::new(BinaryOp {
-                    op: BinaryOperator::Multiply,
-                    left: Expr::Field(Field {
-                        prefix: None,
-                        value: 0
-                    }),
-                    right: Expr::BinaryOp(Box::new(BinaryOp {
-                        op: BinaryOperator::Add,
-                        left: Expr::NumbericLiteral(NumbericLiteral { value: 3 }),
-                        right: Expr::NumbericLiteral(NumbericLiteral { value: 5 }),
-                    })),
-                })),
-                right: Expr::BinaryOp(Box::new(BinaryOp {
-                    op: BinaryOperator::Greater,
-                    left: Expr::Field(Field {
-                        prefix: None,
-                        value: 8
-                    }),
-                    right: Expr::NumbericLiteral(NumbericLiteral { value: 10 }),
-                })),
-            }))
-        );
-    }
-
-    #[test]
-    fn test_precedence_add_subtract_vs_multiply_divide() {
-        let mut token_table = TokenTable::with_capacity(9);
-        token_table.push(TokenKind::Number, 0, 0);
-        token_table.push(TokenKind::Plus, 1, 1);
-        token_table.push(TokenKind::Number, 2, 2);
-        token_table.push(TokenKind::Multiply, 3, 3);
-        token_table.push(TokenKind::Number, 4, 4);
-        token_table.push(TokenKind::Divide, 5, 5);
-        token_table.push(TokenKind::Number, 6, 6);
-        token_table.push(TokenKind::Subtract, 7, 7);
-        token_table.push(TokenKind::Number, 8, 8);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        let _inner = match &expr {
-            Expr::BinaryOp(bop) => &bop.right,
-            _ => panic!("Expected BinaryOp"),
-        };
-        assert_eq!(
-            expr,
-            Expr::BinaryOp(Box::new(BinaryOp {
-                op: BinaryOperator::Subtract,
-                left: Expr::BinaryOp(Box::new(BinaryOp {
-                    op: BinaryOperator::Add,
-                    left: Expr::NumbericLiteral(NumbericLiteral { value: 0 }),
-                    right: Expr::BinaryOp(Box::new(BinaryOp {
-                        op: BinaryOperator::Divide,
-                        left: Expr::BinaryOp(Box::new(BinaryOp {
-                            op: BinaryOperator::Multiply,
-                            left: Expr::NumbericLiteral(NumbericLiteral { value: 2 }),
-                            right: Expr::NumbericLiteral(NumbericLiteral { value: 4 }),
-                        })),
-                        right: Expr::NumbericLiteral(NumbericLiteral { value: 6 }),
-                    })),
-                })),
-                right: Expr::NumbericLiteral(NumbericLiteral { value: 8 }),
-            }))
-        );
-    }
-
-    #[test]
-    fn test_alias_without_as() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::Identifier, 4, 8);
-
-        let mut cursor = 0;
-        let alias = Alias::new(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            alias,
-            Alias {
-                name: Some(1),
-                value: Expr::Field(Field {
-                    prefix: None,
-                    value: 0
-                }),
-            }
-        );
-        assert_eq!(cursor, 2);
-    }
-
-    #[test]
-    fn test_alias_with_as() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::Keyword(Keyword::As), 4, 5);
-        token_table.push(TokenKind::Identifier, 6, 10);
-
-        let mut cursor = 0;
-        let alias = Alias::new(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            alias,
-            Alias {
-                name: Some(2),
-                value: Expr::Field(Field {
-                    prefix: None,
-                    value: 0
-                }),
-            }
-        );
-        assert_eq!(cursor, 3);
-    }
-
-    #[test]
-    fn test_alias_function_call() {
-        let mut token_table = TokenTable::with_capacity(5);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::LeftParen, 4, 4);
-        token_table.push(TokenKind::Number, 5, 5);
-        token_table.push(TokenKind::RightParen, 6, 6);
-        token_table.push(TokenKind::Identifier, 7, 10);
-
-        let mut cursor = 0;
-        let alias = Alias::new(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            alias,
-            Alias {
-                name: Some(4),
-                value: Expr::FunctionCall(FunctionCall {
-                    distinct: false,
-                    name: 0,
-                    args: mini_vec![Expr::NumbericLiteral(NumbericLiteral { value: 2 })],
-                }),
-            }
-        );
-        assert_eq!(cursor, 5);
-    }
-
-    #[test]
-    fn test_function_call_with_nested_expression() {
-        let mut token_table = TokenTable::with_capacity(11);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::LeftParen, 4, 4);
-        token_table.push(TokenKind::Identifier, 5, 6);
-        token_table.push(TokenKind::Plus, 7, 7);
-        token_table.push(TokenKind::Number, 8, 8);
-        token_table.push(TokenKind::Comma, 9, 9);
-        token_table.push(TokenKind::Identifier, 10, 13);
-        token_table.push(TokenKind::Multiply, 14, 14);
-        token_table.push(TokenKind::Number, 15, 15);
-        token_table.push(TokenKind::RightParen, 16, 16);
-
-        let mut cursor = 0;
-        let expr = Expr::class_function_call(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            expr,
-            Expr::FunctionCall(FunctionCall {
-                distinct: false,
-                name: 0,
-                args: mini_vec![
-                    Expr::BinaryOp(Box::new(BinaryOp {
-                        op: BinaryOperator::Add,
-                        left: Expr::Field(Field {
-                            prefix: None,
-                            value: 2
-                        }),
-                        right: Expr::NumbericLiteral(NumbericLiteral { value: 4 }),
-                    })),
-                    Expr::BinaryOp(Box::new(BinaryOp {
-                        op: BinaryOperator::Multiply,
-                        left: Expr::Field(Field {
-                            prefix: None,
-                            value: 6
-                        }),
-                        right: Expr::NumbericLiteral(NumbericLiteral { value: 8 }),
-                    })),
-                ]
-            })
-        );
-    }
-
-    #[test]
-    fn test_longer_arithmetic_chain() {
-        let mut token_table = TokenTable::with_capacity(13);
-        token_table.push(TokenKind::Number, 0, 0);
-        token_table.push(TokenKind::Plus, 1, 1);
-        token_table.push(TokenKind::Number, 2, 2);
-        token_table.push(TokenKind::Plus, 3, 3);
-        token_table.push(TokenKind::Number, 4, 4);
-        token_table.push(TokenKind::Plus, 5, 5);
-        token_table.push(TokenKind::Number, 6, 6);
-        token_table.push(TokenKind::Multiply, 7, 7);
-        token_table.push(TokenKind::Number, 8, 8);
-        token_table.push(TokenKind::Multiply, 9, 9);
-        token_table.push(TokenKind::Number, 10, 10);
-        token_table.push(TokenKind::Plus, 11, 11);
-        token_table.push(TokenKind::Number, 12, 12);
-
-        let mut cursor = 0;
-        let _expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(cursor, 13);
-    }
-
-    #[test]
-    fn test_between_invalid_missing_and() {
-        let mut token_table = TokenTable::with_capacity(5);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::Keyword(Keyword::Between), 4, 10);
-        token_table.push(TokenKind::Number, 11, 12);
-        token_table.push(TokenKind::Number, 13, 14);
-        token_table.push(TokenKind::Number, 15, 16);
-
-        let mut cursor = 0;
-        let result = Expr::build(&token_table, &mut cursor);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_in_basic() {
-        let mut token_table = TokenTable::with_capacity(9);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::Keyword(Keyword::In), 4, 5);
-        token_table.push(TokenKind::LeftParen, 6, 6);
-        token_table.push(TokenKind::Number, 7, 7);
-        token_table.push(TokenKind::Comma, 8, 8);
-        token_table.push(TokenKind::Number, 9, 9);
-        token_table.push(TokenKind::Comma, 10, 10);
-        token_table.push(TokenKind::StringLiteral, 11, 15);
-        token_table.push(TokenKind::RightParen, 16, 16);
-
-        let mut cursor = 0;
-        let result = Expr::build(&token_table, &mut cursor);
-        assert!(result.is_ok());
-        let expr = result.unwrap();
-        assert_eq!(cursor, 9);
-
-        let expected = Expr::In(In {
-            is_not: false,
-            field: Box::new(Expr::Field(Field {
-                prefix: None,
-                value: 0,
-            })),
-            in_value: InValue::List(mini_vec![
-                Expr::NumbericLiteral(NumbericLiteral { value: 3 }),
-                Expr::NumbericLiteral(NumbericLiteral { value: 5 }),
-                Expr::StringLiteral(StringLiteral { value: 7 }),
-            ]),
-        });
-        assert_eq!(expr, expected);
-    }
-
-    #[test]
-    fn test_in_with_single_value() {
-        let mut token_table = TokenTable::with_capacity(5);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::Keyword(Keyword::In), 4, 5);
-        token_table.push(TokenKind::LeftParen, 6, 6);
-        token_table.push(TokenKind::Number, 7, 8);
-        token_table.push(TokenKind::RightParen, 9, 9);
-
-        let mut cursor = 0;
-        let result = Expr::build(&token_table, &mut cursor);
-        assert!(result.is_ok());
-        assert_eq!(cursor, 5);
-
-        let expr = result.unwrap();
-        if let Expr::In(in_expr) = expr {
-            if let InValue::List(list) = in_expr.in_value {
-                assert_eq!(list.len(), 1);
-            } else {
-                panic!("Expected In expression");
-            }
-        } else {
-            panic!("Expected In expression");
-        }
-    }
-
-    #[test]
-    fn test_in_with_field_values() {
-        let mut token_table = TokenTable::with_capacity(9);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::Keyword(Keyword::In), 4, 5);
-        token_table.push(TokenKind::LeftParen, 6, 6);
-        token_table.push(TokenKind::Identifier, 7, 10);
-        token_table.push(TokenKind::Comma, 11, 11);
-        token_table.push(TokenKind::Identifier, 12, 15);
-        token_table.push(TokenKind::Comma, 16, 16);
-        token_table.push(TokenKind::Identifier, 17, 20);
-        token_table.push(TokenKind::RightParen, 21, 21);
-
-        let mut cursor = 0;
-        let result = Expr::build(&token_table, &mut cursor);
-        assert!(result.is_ok());
-        let expr = result.unwrap();
-        assert_eq!(cursor, 9);
-
-        let expected = Expr::In(In {
-            is_not: false,
-            field: Box::new(Expr::Field(Field {
-                prefix: None,
-                value: 0,
-            })),
-            in_value: InValue::List(mini_vec![
-                Expr::Field(Field {
-                    prefix: None,
-                    value: 3
-                }),
-                Expr::Field(Field {
-                    prefix: None,
-                    value: 5
-                }),
-                Expr::Field(Field {
-                    prefix: None,
-                    value: 7
-                }),
-            ]),
-        });
-        assert_eq!(expr, expected);
-    }
-
-    #[test]
-    fn test_in_invalid_missing_paren() {
-        let mut token_table = TokenTable::with_capacity(5);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::Keyword(Keyword::In), 4, 5);
-        token_table.push(TokenKind::Number, 6, 7);
-        token_table.push(TokenKind::Comma, 8, 8);
-        token_table.push(TokenKind::Number, 9, 10);
-
-        let mut cursor = 0;
-        let result = Expr::build(&token_table, &mut cursor);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_in_invalid_missing_value() {
-        let mut token_table = TokenTable::with_capacity(4);
-        token_table.push(TokenKind::Identifier, 0, 3);
-        token_table.push(TokenKind::Keyword(Keyword::In), 4, 5);
-        token_table.push(TokenKind::LeftParen, 6, 6);
-        token_table.push(TokenKind::RightParen, 7, 7);
-
-        let mut cursor = 0;
-        let result = Expr::build(&token_table, &mut cursor);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_is_null() {
-        let mut token_table = TokenTable::with_capacity(3);
-        token_table.push(TokenKind::Identifier, 0, 3); // col
-        token_table.push(TokenKind::Keyword(Keyword::Is), 4, 5); // IS
-        token_table.push(TokenKind::Keyword(Keyword::Null), 6, 9); // NULL
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            expr,
-            Expr::IsNull(IsNull {
-                is_not: false,
-                field: Box::new(Expr::Field(Field {
-                    prefix: None,
-                    value: 0,
-                })),
-            })
-        );
-    }
-
-    #[test]
-    fn test_is_not_null() {
-        let mut token_table = TokenTable::with_capacity(4);
-        token_table.push(TokenKind::Identifier, 0, 3); // col
-        token_table.push(TokenKind::Keyword(Keyword::Is), 4, 5); // IS
-        token_table.push(TokenKind::Keyword(Keyword::Not), 6, 8); // NOT
-        token_table.push(TokenKind::Keyword(Keyword::Null), 9, 12); // NULL
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(
-            expr,
-            Expr::IsNull(IsNull {
-                is_not: true,
-                field: Box::new(Expr::Field(Field {
-                    prefix: None,
-                    value: 0,
-                })),
-            })
-        );
-    }
-
-    #[test]
-    fn test_bool_literal_true() {
-        let mut token_table = TokenTable::with_capacity(1);
-        token_table.push(TokenKind::Keyword(Keyword::True), 0, 3);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(expr, Expr::BoolLiteral(true));
-    }
-
-    #[test]
-    fn test_bool_literal_false() {
-        let mut token_table = TokenTable::with_capacity(1);
-        token_table.push(TokenKind::Keyword(Keyword::False), 0, 4);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(expr, Expr::BoolLiteral(false));
-    }
-
-    #[test]
-    fn test_null_literal() {
-        let mut token_table = TokenTable::with_capacity(1);
-        token_table.push(TokenKind::Keyword(Keyword::Null), 0, 3);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert_eq!(expr, Expr::NullLiteral);
-    }
-
-    #[test]
-    fn test_exists_subquery() {
-        let mut token_table = TokenTable::with_capacity(10);
-        token_table.push(TokenKind::Keyword(Keyword::Exists), 0, 5);
-        token_table.push(TokenKind::LeftParen, 6, 6);
-        token_table.push(TokenKind::Keyword(Keyword::Select), 7, 12);
-        token_table.push(TokenKind::Multiply, 13, 13);
-        token_table.push(TokenKind::Keyword(Keyword::From), 14, 17);
-        token_table.push(TokenKind::Identifier, 18, 22); // users
-        token_table.push(TokenKind::Keyword(Keyword::Where), 23, 27);
-        token_table.push(TokenKind::Identifier, 28, 29); // id
-        token_table.push(TokenKind::Equal, 30, 30);
-        token_table.push(TokenKind::Number, 31, 31);
-        token_table.push(TokenKind::RightParen, 32, 32);
-
-        let mut cursor = 0;
-        let expr = Expr::build(&token_table, &mut cursor).unwrap();
-        assert!(matches!(expr, Expr::Exists(_)));
     }
 }

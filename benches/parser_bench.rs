@@ -39,7 +39,6 @@ JOIN orders o ON u.id = o.user_id
 JOIN order_items oi ON o.id = oi.order_id
 JOIN products p ON oi.product_id = p.id
 WHERE u.active = 1 AND o.status = 'completed';";
-
     let sql_len_3 = sql_3.len();
     group.throughput(Throughput::Elements(sql_3.len() as u64));
     group.bench_with_input(
@@ -67,7 +66,6 @@ WHERE u.active = 1 AND o.status = 'completed';";
            ELSE 'Other'
        END as dept_full_name
 FROM students;";
-
     let sql_len_4 = sql_4.len();
     group.throughput(Throughput::Elements(sql_4.len() as u64));
     group.bench_with_input(
@@ -118,19 +116,6 @@ FROM students;";
             });
         },
     );
-
-    // let sql_8 = "SELECT u.id, u.name, o.total as order_total, (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.created_at > '2024-01-01'";
-    // let sql_len_8 = sql_8.len();
-    // group.throughput(Throughput::Elements(sql_8.len() as u64));
-    // group.bench_with_input(
-    //     BenchmarkId::new("sql parser 8 - correlated subquery", sql_len_8),
-    //     sql_8,
-    //     |b, i| {
-    //         b.iter(|| {
-    //             parser.parse(black_box(&i)).unwrap();
-    //         });
-    //     },
-    // );
 
     let sql_9 = "SELECT id, name, LOWER(email) as email_lower, UPPER(name) as name_upper, CONCAT(first_name, ' ', last_name) as full_name, LENGTH(name) as name_len FROM users WHERE TRIM(status) = 'active'";
     let sql_len_9 = sql_9.len();

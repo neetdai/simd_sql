@@ -10,17 +10,23 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub struct DeleteStatement {
-    pub table: Table,
-    pub conditions: Option<Expr>,
+pub struct DeleteStatement<'a> {
+    pub table: Table<'a>,
+    pub conditions: Option<Expr<'a>>,
 }
 
-impl DeleteStatement {
-    pub(crate) fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> DeleteStatement<'a> {
+    pub(crate) fn new(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         Self::build_ast(token_table, cursor)
     }
 
-    fn build_ast(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    fn build_ast(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Delete))?;
         *cursor += 1;
 

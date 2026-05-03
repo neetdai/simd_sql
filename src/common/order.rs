@@ -23,19 +23,22 @@ pub enum NullsOrder {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct OrderItem {
-    pub expr: Expr,
+pub struct OrderItem<'a> {
+    pub expr: Expr<'a>,
     pub direction: OrderDirection,
     pub nulls_order: Option<NullsOrder>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Order {
-    pub columns: MiniVec<OrderItem>,
+pub struct Order<'a> {
+    pub columns: MiniVec<OrderItem<'a>>,
 }
 
-impl Order {
-    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> Order<'a> {
+    pub(crate) fn build(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Order))?;
         *cursor += 1;
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::By))?;

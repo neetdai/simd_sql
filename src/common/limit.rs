@@ -6,13 +6,16 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub struct Limit {
-    offset: Option<Expr>,
-    limit: Expr,
+pub struct Limit<'a> {
+    pub offset: Option<Expr<'a>>,
+    pub limit: Expr<'a>,
 }
 
-impl Limit {
-    pub fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> Limit<'a> {
+    pub fn new(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Limit))?;
         *cursor += 1;
 
@@ -36,9 +39,8 @@ impl Limit {
         match (first, comma, offset, second) {
             (true, true, false, true) => {
                 let offset = Expr::build(token_table, cursor)?;
-                *cursor += 1; // skip comma
+                *cursor += 1;
                 let limit = Expr::build(token_table, cursor)?;
-
                 Ok(Limit {
                     offset: Some(offset),
                     limit,
@@ -46,7 +48,7 @@ impl Limit {
             }
             (true, false, true, true) => {
                 let limit = Expr::build(token_table, cursor)?;
-                *cursor += 1; // skip offset
+                *cursor += 1;
                 let offset = Expr::build(token_table, cursor)?;
                 Ok(Limit {
                     offset: Some(offset),

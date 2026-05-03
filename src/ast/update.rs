@@ -12,18 +12,24 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub struct UpdateStatement {
-    pub table: From,
-    pub assignments: MiniVec<Expr>,
-    pub where_statement: Option<Expr>,
+pub struct UpdateStatement<'a> {
+    pub table: From<'a>,
+    pub assignments: MiniVec<Expr<'a>>,
+    pub where_statement: Option<Expr<'a>>,
 }
 
-impl UpdateStatement {
-    pub fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> UpdateStatement<'a> {
+    pub fn new(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         Self::build_ast(token_table, cursor)
     }
 
-    fn build_ast(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    fn build_ast(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Update))?;
         *cursor += 1;
 

@@ -16,26 +16,29 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub struct SelectStatement {
+pub struct SelectStatement<'a> {
     pub distinct: bool,
-    pub columns: Vec<Alias<Expr>>,
-    pub from: Option<MiniVec<From>>,
-    pub where_statement: Option<Expr>,
-    pub group_by: Option<Group>,
-    pub having_statement: Option<Expr>,
-    pub order_by: Option<Order>,
-    pub limit: Option<Limit>,
+    pub columns: Vec<Alias<'a, Expr<'a>>>,
+    pub from: Option<MiniVec<From<'a>>>,
+    pub where_statement: Option<Expr<'a>>,
+    pub group_by: Option<Group<'a>>,
+    pub having_statement: Option<Expr<'a>>,
+    pub order_by: Option<Order<'a>>,
+    pub limit: Option<Limit<'a>>,
 }
 
-impl SelectStatement {
-    pub fn new(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
-        // Ok(Self {
-        //     columns: Vec::new(),
-        // })
+impl<'a> SelectStatement<'a> {
+    pub fn new(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         Self::build_ast(token_table, cursor)
     }
 
-    fn build_ast(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+    fn build_ast(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Select))?;
         *cursor += 1;
 
@@ -136,10 +139,13 @@ impl SelectStatement {
     }
 }
 
-pub type SubSelectStatement = Box<SelectStatement>;
+pub type SubSelectStatement<'a> = Box<SelectStatement<'a>>;
 
-impl Aliasable for SubSelectStatement {
-    fn aliasable(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> Aliasable<'a> for SubSelectStatement<'a> {
+    fn aliasable(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::LeftParen)?;
         *cursor += 1;
         let select_stmt = SelectStatement::new(token_table, cursor)?;

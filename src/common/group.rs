@@ -8,12 +8,15 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub struct Group {
-    columns: MiniVec<Expr>,
+pub struct Group<'a> {
+    pub columns: MiniVec<Expr<'a>>,
 }
 
-impl Group {
-    pub(crate) fn build(token_table: &TokenTable, cursor: &mut usize) -> Result<Self, ParserError> {
+impl<'a> Group<'a> {
+    pub(crate) fn build(
+        token_table: &TokenTable<'a>,
+        cursor: &mut usize,
+    ) -> Result<Self, ParserError> {
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Group))?;
         *cursor += 1;
         expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::By))?;

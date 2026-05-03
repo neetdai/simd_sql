@@ -1,11 +1,13 @@
 use crate::{
     error::ParserError,
-    find_consecutive_in_range,
     keyword::{Keyword, KeywordMap},
-    longest_consecutive_matching,
-    simd_common::{is_escaped, mixed_match, skip_until_match, skip_until_sequence},
+    simd_common::{
+        find_consecutive_in_range, is_escaped, longest_consecutive_matching, mixed_match,
+        skip_until_match, skip_until_sequence,
+    },
     token::{TokenKind, TokenTable},
 };
+use std::string::String;
 
 // ============================================================================
 // 1. 静态查找表 (Lookup Table) - 消除分支预测失败
@@ -514,56 +516,56 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn scan_symbol(&mut self, table: &mut TokenTable) -> Result<(), ParserError> {
+    fn scan_symbol(&mut self, table: &mut TokenTable<'a>) -> Result<(), ParserError> {
         let start = self.position;
         let end = self.position;
         match self.inner.get(self.position) {
             Some(b'(') => {
-                table.push(TokenKind::LeftParen, start, end);
+                table.push(TokenKind::LeftParen, String::from_utf8_lossy(&self.inner[start..=end]));
                 self.position += 1;
             }
             Some(b')') => {
-                table.push(TokenKind::RightParen, start, end);
+                table.push(TokenKind::RightParen, String::from_utf8_lossy(&self.inner[start..=end]));
                 self.position += 1;
             }
             Some(b'<') => match self.inner.get(self.position + 1) {
                 Some(b'=') => {
-                    table.push(TokenKind::LessEqual, self.position, self.position + 1);
+                    table.push(TokenKind::LessEqual, String::from_utf8_lossy(&self.inner[self.position..= self.position + 1]));
                     self.position += 2;
                 }
                 Some(b'>') => {
-                    table.push(TokenKind::NotEqual, self.position, self.position + 1);
+                    table.push(TokenKind::NotEqual, String::from_utf8_lossy(&self.inner[self.position..= self.position + 1]));
                     self.position += 2;
                 }
                 _ => {
-                    table.push(TokenKind::Less, start, end);
+                    table.push(TokenKind::Less, String::from_utf8_lossy(&self.inner[start..= end]));
                     self.position += 1;
                 }
             },
             Some(b'>') => match self.inner.get(self.position + 1) {
                 Some(b'=') => {
-                    table.push(TokenKind::GreaterEqual, self.position, self.position + 1);
+                    table.push(TokenKind::GreaterEqual, String::from_utf8_lossy(&self.inner[self.position..= self.position + 1]));
                     self.position += 2;
                 }
                 _ => {
-                    table.push(TokenKind::Greater, start, end);
+                    table.push(TokenKind::Greater,String::from_utf8_lossy(&self.inner[start..= end]));
                     self.position += 1;
                 }
             },
             Some(b'=') => {
-                table.push(TokenKind::Equal, start, end);
+                table.push(TokenKind::Equal, String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             }
             Some(b'.') => {
-                table.push(TokenKind::Dot, start, end);
+                table.push(TokenKind::Dot, String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             }
             Some(b',') => {
-                table.push(TokenKind::Comma, start, end);
+                table.push(TokenKind::Comma, String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             }
             Some(b'+') => {
-                table.push(TokenKind::Plus, start, end);
+                table.push(TokenKind::Plus, String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             }
             Some(b'-') => match self.inner.get(self.position + 1) {
@@ -574,16 +576,16 @@ impl<'a> Lexer<'a> {
                     let start = self.position;
                     self.position += 1;
                     let (kind, _, end) = self.scan_number()?;
-                    table.push(kind, start, end);
+                    table.push(kind, String::from_utf8_lossy(&self.inner[start..= end]));
                     self.position += 1;
                 }
                 _ => {
-                    table.push(TokenKind::Subtract, start, end);
+                    table.push(TokenKind::Subtract,String::from_utf8_lossy(&self.inner[start..= end]));
                     self.position += 1;
                 }
             },
             Some(b'*') => {
-                table.push(TokenKind::Multiply, start, end);
+                table.push(TokenKind::Multiply, String::from_utf8_lossy(&self.inner[ start..= end]));
                 self.position += 1;
             }
             Some(b'/') => match self.inner.get(self.position + 1) {
@@ -594,33 +596,33 @@ impl<'a> Lexer<'a> {
                     self.skip_line_comment();
                 }
                 _ => {
-                    table.push(TokenKind::Divide, start, end);
+                    table.push(TokenKind::Divide, String::from_utf8_lossy(&self.inner[start..= end]));
                     self.position += 1;
                 }
             },
             Some(b'%') => {
-                table.push(TokenKind::Mod, start, end);
+                table.push(TokenKind::Mod, String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             }
             Some(b';') => {
-                table.push(TokenKind::Eof, start, end);
+                table.push(TokenKind::Eof, String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             }
             Some(b'&') => {
-                table.push(TokenKind::And, start, end);
+                table.push(TokenKind::And, String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             }
             Some(b'|') => {
-                table.push(TokenKind::Or, start, end);
+                table.push(TokenKind::Or,String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             }
             Some(b'^') => {
-                table.push(TokenKind::Xor, start, end);
+                table.push(TokenKind::Xor, String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             }
             Some(b'!') => match self.inner.get(self.position + 1) {
                 Some(b'=') => {
-                    table.push(TokenKind::NotEqual, self.position, self.position + 1);
+                    table.push(TokenKind::NotEqual, String::from_utf8_lossy(&self.inner[self.position ..= self.position + 1]));
                     self.position += 2;
                 }
                 _ => {
@@ -632,9 +634,10 @@ impl<'a> Lexer<'a> {
         Ok(())
     }
 
-    pub(crate) fn tokenize(&mut self) -> Result<TokenTable, ParserError> {
-        let mut table = TokenTable::with_capacity(self.inner.len() / 4);
-
+    pub(crate) fn tokenize(
+        &mut self,
+        table: &mut TokenTable<'a>,
+    ) -> Result<(), ParserError> {
         loop {
             self.skip_whitespace();
 
@@ -648,21 +651,21 @@ impl<'a> Lexer<'a> {
             if (char_class & C_ALP) != 0 {
                 if (char_class & C_DIG) != 0 {
                     let (kind, start, end) = self.scan_number()?;
-                    table.push(kind, start, end);
+                    table.push(kind, String::from_utf8_lossy(&self.inner[start..= end]));
                     self.position += 1;
                 } else {
                     let (kind, start, end) = self.scan_identify()?;
-                    table.push(kind, start, end);
+                    table.push(kind, String::from_utf8_lossy(&self.inner[start..= end]));
                     self.position += 1;
                 }
             } else if (char_class & C_SYM) != 0 {
-                self.scan_symbol(&mut table)?;
+                self.scan_symbol(&mut *table)?;
             } else if (char_class & C_QUO) != 0 {
                 let (kind, start, end) = self.scan_string(c)?;
-                table.push(kind, start, end);
+                table.push(kind, String::from_utf8_lossy(&self.inner[start..= end]));
                 self.position += 1;
             } else {
-                table.push(TokenKind::Unknown, self.position, self.position);
+                table.push(TokenKind::Unknown, String::from_utf8_lossy(&self.inner[self.position..= self.position]));
                 self.position += 1;
             }
 
@@ -765,452 +768,295 @@ impl<'a> Lexer<'a> {
             // }
         }
 
-        Ok(table)
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use super::*;
-    use crate::token::{TokenKind, TokenTable};
+    use crate::token::TokenKind;
+
+    fn tokenize<'a>(keyword_map: &'a KeywordMap, sql: &'a str) -> Result<(Vec<TokenKind>, Vec<Cow<'a, str>>), ParserError> {
+        let mut table = TokenTable::with_source(sql);
+        let mut lexer = Lexer::new(sql, &keyword_map).unwrap();
+        lexer.tokenize(&mut table)?;
+        Ok((table.tokens, table.source_ref_list))
+    }
+
+    fn tokenize_err(sql: &str) -> bool {
+        let keyword_map = KeywordMap::new().unwrap();
+        let mut table = TokenTable::with_source(sql);
+        let mut lexer = Lexer::new(sql, &keyword_map).unwrap();
+        lexer.tokenize(&mut table).is_err()
+    }
 
     #[test]
     fn test_skip_whitespace() {
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = Lexer::new(
-            r#"                 
-                "#,
-            &keyword_map,
-        )
-        .unwrap();
-        let tokens = lexer.tokenize().unwrap();
         assert_eq!(
-            tokens,
-            TokenTable {
-                tokens: vec![],
-                positions: vec![],
-            }
-        );
-
-        let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = Lexer::new(r#""#, &keyword_map).unwrap();
-        let tokens = lexer.tokenize().unwrap();
-        assert_eq!(
-            tokens,
-            TokenTable {
-                tokens: vec![],
-                positions: vec![],
-            }
+            tokenize(
+                &keyword_map,
+                r#"                 
+                "#
+            )
+            .unwrap(),
+            (vec![], vec![])
         );
     }
 
     #[test]
     fn test_match_number() {
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = Lexer::new("1234567890", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number,],
-                positions: vec![(0, 9)],
-            }
+            tokenize(&keyword_map, "1234567890").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("1234567890")])
         );
-
-        let mut lexer = Lexer::new(
-            "123451111111111111111111111111111111111111 2222222222222222222222222222",
-            &keyword_map,
-        )
-        .unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number, TokenKind::Number],
-                positions: vec![(0, 41), (43, 70)],
-            }
+            tokenize(
+                &keyword_map,
+                "123451111111111111111111111111111111111111 2222222222222222222222222222"
+            )
+            .unwrap(),
+            (
+                vec![TokenKind::Number, TokenKind::Number],
+                vec![Cow::Borrowed("123451111111111111111111111111111111111111"), Cow::Borrowed("2222222222222222222222222222")]
+            )
         );
-
-        let mut lexer = Lexer::new("-123", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 3)],
-            }
+            tokenize(&keyword_map, "-123").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("-123")])
         );
-
-        let mut lexer = Lexer::new("-123.456", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 7)],
-            }
+            tokenize(&keyword_map, "-123.456").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("-123.456")])
         );
-
-        let mut lexer = Lexer::new("123_456_7890", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 11)],
-            }
+            tokenize(&keyword_map,"123_456_7890").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("123_456_7890")])
         );
-
-        let mut lexer = Lexer::new("-123.456E10", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 10)],
-            }
+            tokenize(&keyword_map, "-123.456E10").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("-123.456E10")])
         );
-
-        let mut lexer = Lexer::new("-123.456_789E10", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 14)],
-            }
+            tokenize(&keyword_map, "-123.456_789E10").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("-123.456_789E10")])
         );
-
-        let mut lexer = Lexer::new("1", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 0)],
-            }
+            tokenize(&keyword_map, "1").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("1")])
         );
-
-        // 十六进制
-        let mut lexer = Lexer::new("0xFF", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 3)],
-            }
+            tokenize(&keyword_map,"0xFF").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("0xFF")])
         );
-
-        let mut lexer = Lexer::new("0x1A2b", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 5)],
-            }
+            tokenize(&keyword_map, "0x1A2b").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("0x1A2b")])
         );
-
-        let mut lexer = Lexer::new("0xff_ee", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 6)],
-            }
+            tokenize(&keyword_map, "0xff_ee").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("0xff_ee")])
         );
-
-        let mut lexer = Lexer::new("-0xDEAD", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 6)],
-            }
+            tokenize(&keyword_map, "-0xDEAD").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("-0xDEAD")])
         );
-
-        // 八进制
-        let mut lexer = Lexer::new("0o777", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 4)],
-            }
+            tokenize(&keyword_map, "0o777").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("0o777")])
         );
-
-        // 二进制
-        let mut lexer = Lexer::new("0b1010", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 5)],
-            }
+            tokenize(&keyword_map, "0b1010").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("0b1010")])
         );
-
-        let mut lexer = Lexer::new("0b1111_0000", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 10)],
-            }
+            tokenize(&keyword_map,"0b1111_0000").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("0b1111_0000")])
         );
-
-        // 0x 后无有效数字应报错
-        let mut lexer = Lexer::new("0x", &keyword_map).unwrap();
-        assert!(lexer.tokenize().is_err());
-
-        // 单独的 0 仍然是数字
-        let mut lexer = Lexer::new("0", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
+        assert!(tokenize_err("0x"));
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 0)],
-            }
+            tokenize(&keyword_map, "0").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("0")])
         );
-
-        // 前导零的十进制仍然是数字
-        let mut lexer = Lexer::new("0123", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Number],
-                positions: vec![(0, 3)],
-            }
+            tokenize(&keyword_map, "0123").unwrap(),
+            (vec![TokenKind::Number], vec![Cow::Borrowed("0123")])
         );
     }
 
     #[test]
     fn test_tokenize_cmp() {
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = Lexer::new("a > b >= c < d <= e <> f = g", &keyword_map).unwrap();
-        let tokens = lexer.tokenize().unwrap();
+        let (tokens, positions) = tokenize(&keyword_map,"a > b >= c < d <= e <> f = g").unwrap();
         assert_eq!(
             tokens,
-            TokenTable {
-                tokens: vec![
-                    TokenKind::Identifier,
-                    TokenKind::Greater,
-                    TokenKind::Identifier,
-                    TokenKind::GreaterEqual,
-                    TokenKind::Identifier,
-                    TokenKind::Less,
-                    TokenKind::Identifier,
-                    TokenKind::LessEqual,
-                    TokenKind::Identifier,
-                    TokenKind::NotEqual,
-                    TokenKind::Identifier,
-                    TokenKind::Equal,
-                    TokenKind::Identifier
-                ],
-                positions: vec![
-                    (0, 0),
-                    (2, 2),
-                    (4, 4),
-                    (6, 7),
-                    (9, 9),
-                    (11, 11),
-                    (13, 13),
-                    (15, 16),
-                    (18, 18),
-                    (20, 21),
-                    (23, 23),
-                    (25, 25),
-                    (27, 27)
-                ],
-            }
-        )
+            vec![
+                TokenKind::Identifier,
+                TokenKind::Greater,
+                TokenKind::Identifier,
+                TokenKind::GreaterEqual,
+                TokenKind::Identifier,
+                TokenKind::Less,
+                TokenKind::Identifier,
+                TokenKind::LessEqual,
+                TokenKind::Identifier,
+                TokenKind::NotEqual,
+                TokenKind::Identifier,
+                TokenKind::Equal,
+                TokenKind::Identifier
+            ]
+        );
+        assert_eq!(
+            positions,
+            vec![
+                Cow::Borrowed("a"),
+                Cow::Borrowed(">"),
+                Cow::Borrowed("b"),
+                Cow::Borrowed(">="),
+                Cow::Borrowed("c"),
+                Cow::Borrowed("<"),
+                Cow::Borrowed("d"),
+                Cow::Borrowed("<="),
+                Cow::Borrowed("e"),
+                Cow::Borrowed("<>"),
+                Cow::Borrowed("f"),
+                Cow::Borrowed("="),
+                Cow::Borrowed("g")
+            ]
+        );
     }
 
     #[test]
     fn test_match_string() {
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = Lexer::new("''", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::StringLiteral],
-                positions: vec![(0, 1)],
-            }
+            tokenize(&keyword_map, "''").unwrap(),
+            (vec![TokenKind::StringLiteral], vec![Cow::Borrowed("''")])
         );
-
-        let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = Lexer::new("'helloWorld'", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::StringLiteral],
-                positions: vec![(0, 11)],
-            }
+            tokenize(&keyword_map, "'helloWorld'").unwrap(),
+            (vec![TokenKind::StringLiteral], vec![Cow::Borrowed("'helloWorld'")])
         );
-
-        // \\\\' → 偶数个反斜杠，' 未被转义，位置8闭合
-        let mut lexer = Lexer::new(r#"'hello\\'"#, &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::StringLiteral],
-                positions: vec![(0, 8)],
-            }
+            tokenize(&keyword_map, r#"'hello\\'"#).unwrap(),
+            (vec![TokenKind::StringLiteral], vec![Cow::Borrowed(r#"'hello\\'"#)])
         );
-
-        let mut lexer = Lexer::new(
-            "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
-            &keyword_map,
-        )
-        .unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::StringLiteral],
-                positions: vec![(0, 60)],
-            }
+            tokenize(&keyword_map,
+                "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'"
+            )
+            .unwrap(),
+            (vec![TokenKind::StringLiteral], vec![Cow::Borrowed("'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'")])
         );
-
-        let mut lexer = Lexer::new(
-            "\'aaaaaaaaaaaaa\\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\'",
-            &keyword_map,
-        )
-        .unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::StringLiteral],
-                positions: vec![(0, 64)],
-            }
+            tokenize(&keyword_map,
+                "\'aaaaaaaaaaaaa\\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\'"
+            )
+            .unwrap(),
+            (vec![TokenKind::StringLiteral], vec![Cow::Borrowed("\'aaaaaaaaaaaaa\\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\'")])
         );
     }
 
     #[test]
     fn test_match_indentify() {
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = Lexer::new("asdfghjk", &keyword_map).unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Identifier],
-                positions: vec![(0, 7)],
-            }
+            tokenize(&keyword_map, "asdfghjk").unwrap(),
+            (vec![TokenKind::Identifier], vec![Cow::Borrowed("asdfghjk")])
         );
-
-        let mut lexer = Lexer::new(
-            "qwertyuiopASDFGHJKL1234567890_zxcvbnm 1234567890",
-            &keyword_map,
-        )
-        .unwrap();
-        let token = lexer.tokenize().unwrap();
         assert_eq!(
-            token,
-            TokenTable {
-                tokens: vec![TokenKind::Identifier, TokenKind::Number],
-                positions: vec![(0, 36), (38, 47)],
-            }
+            tokenize(&keyword_map, "qwertyuiopASDFGHJKL1234567890_zxcvbnm 1234567890").unwrap(),
+            (
+                vec![TokenKind::Identifier, TokenKind::Number],
+                vec![Cow::Borrowed("qwertyuiopASDFGHJKL1234567890_zxcvbnm"), Cow::Borrowed("1234567890")]
+            )
         );
     }
 
     #[test]
     fn test_keyword() {
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = Lexer::new("select from", &keyword_map).unwrap();
-        let tokens = lexer.tokenize().unwrap();
+        let (tokens, positions) = tokenize(&keyword_map, "select from").unwrap();
         assert_eq!(
             tokens,
-            TokenTable {
-                tokens: vec![
-                    TokenKind::Keyword(Keyword::Select),
-                    TokenKind::Keyword(Keyword::From)
-                ],
-                positions: vec![(0, 5), (7, 10)],
-            }
+            vec![
+                TokenKind::Keyword(Keyword::Select),
+                TokenKind::Keyword(Keyword::From)
+            ]
         );
+        assert_eq!(positions, vec![Cow::Borrowed("select"), Cow::Borrowed("from")]);
     }
 
     #[test]
     fn test_sql() {
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer = Lexer::new("select * from a", &keyword_map).unwrap();
-        let tokens = lexer.tokenize().unwrap();
+        let (tokens, positions) = tokenize(&keyword_map,"select * from a").unwrap();
         assert_eq!(
             tokens,
-            TokenTable {
-                tokens: vec![
-                    TokenKind::Keyword(Keyword::Select),
-                    TokenKind::Multiply,
-                    TokenKind::Keyword(Keyword::From),
-                    TokenKind::Identifier,
-                ],
-                positions: vec![(0, 5), (7, 7), (9, 12), (14, 14)],
-            }
+            vec![
+                TokenKind::Keyword(Keyword::Select),
+                TokenKind::Multiply,
+                TokenKind::Keyword(Keyword::From),
+                TokenKind::Identifier,
+            ]
         );
+        assert_eq!(positions, vec![Cow::Borrowed("select"), Cow::Borrowed("*"), Cow::Borrowed("from"), Cow::Borrowed("a")]);
     }
 
     #[test]
     fn test_sql2() {
         let keyword_map = KeywordMap::new().unwrap();
-        let mut lexer =
-            Lexer::new("select * from a where b in (1,2,3) and c = 1", &keyword_map).unwrap();
-        let tokens = lexer.tokenize().unwrap();
+        let (tokens, positions) =
+            tokenize(&keyword_map, "select * from a where b in (1,2,3) and c = 1").unwrap();
         assert_eq!(
             tokens,
-            TokenTable {
-                tokens: vec![
-                    TokenKind::Keyword(Keyword::Select),
-                    TokenKind::Multiply,
-                    TokenKind::Keyword(Keyword::From),
-                    TokenKind::Identifier,
-                    TokenKind::Keyword(Keyword::Where),
-                    TokenKind::Identifier,
-                    TokenKind::Keyword(Keyword::In),
-                    TokenKind::LeftParen,
-                    TokenKind::Number,
-                    TokenKind::Comma,
-                    TokenKind::Number,
-                    TokenKind::Comma,
-                    TokenKind::Number,
-                    TokenKind::RightParen,
-                    TokenKind::Keyword(Keyword::And),
-                    TokenKind::Identifier,
-                    TokenKind::Equal,
-                    TokenKind::Number
-                ],
-                positions: vec![
-                    (0, 5),
-                    (7, 7),
-                    (9, 12),
-                    (14, 14),
-                    (16, 20),
-                    (22, 22),
-                    (24, 25),
-                    (27, 27),
-                    (28, 28),
-                    (29, 29),
-                    (30, 30),
-                    (31, 31),
-                    (32, 32),
-                    (33, 33),
-                    (35, 37),
-                    (39, 39),
-                    (41, 41),
-                    (43, 43),
-                ]
-            }
+            vec![
+                TokenKind::Keyword(Keyword::Select),
+                TokenKind::Multiply,
+                TokenKind::Keyword(Keyword::From),
+                TokenKind::Identifier,
+                TokenKind::Keyword(Keyword::Where),
+                TokenKind::Identifier,
+                TokenKind::Keyword(Keyword::In),
+                TokenKind::LeftParen,
+                TokenKind::Number,
+                TokenKind::Comma,
+                TokenKind::Number,
+                TokenKind::Comma,
+                TokenKind::Number,
+                TokenKind::RightParen,
+                TokenKind::Keyword(Keyword::And),
+                TokenKind::Identifier,
+                TokenKind::Equal,
+                TokenKind::Number
+            ]
+        );
+        assert_eq!(
+            positions,
+            vec![
+                Cow::Borrowed("select"),
+                Cow::Borrowed("*"),
+                Cow::Borrowed("from"),
+                Cow::Borrowed("a"),
+                Cow::Borrowed("where"),
+                Cow::Borrowed("b"),
+                Cow::Borrowed("in"),
+                Cow::Borrowed("("),
+                Cow::Borrowed("1"),
+                Cow::Borrowed(","),
+                Cow::Borrowed("2"),
+                Cow::Borrowed(","),
+                Cow::Borrowed("3"),
+                Cow::Borrowed(")"),
+                Cow::Borrowed("and"),
+                Cow::Borrowed("c"),
+                Cow::Borrowed("="),
+                Cow::Borrowed("1"),
+            ]
         );
     }
 }

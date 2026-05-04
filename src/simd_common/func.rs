@@ -279,7 +279,7 @@ fn skip_until_sequence_sse<const N: usize>(
     sequence: [u8; N],
     start_pos: usize,
 ) -> (usize, isize) {
-    if start_pos >= slice.len() {
+    if start_pos + N > slice.len() {
         return (start_pos, -1);
     }
     Sse::skip_until_sequence(slice, sequence, start_pos)

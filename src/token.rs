@@ -8,7 +8,7 @@ pub enum TokenKind {
     Number,
     StringLiteral,
     Identifier,
-    Eof,
+    Delimiter,
     Dot,
     LeftParen,
     RightParen,
@@ -37,7 +37,7 @@ impl Display for TokenKind {
             TokenKind::Number => write!(f, "Number"),
             TokenKind::StringLiteral => write!(f, "StringLiteral"),
             TokenKind::Identifier => write!(f, "Identifier"),
-            TokenKind::Eof => write!(f, "Eof"),
+            TokenKind::Delimiter => write!(f, "Delimiter"),
             TokenKind::Dot => write!(f, "Dot"),
             TokenKind::LeftParen => write!(f, "LeftParen"),
             TokenKind::RightParen => write!(f, "RightParen"),
@@ -65,7 +65,7 @@ impl Display for TokenKind {
 #[derive(Debug)]
 pub struct TokenTable<'a> {
     pub tokens: Vec<TokenKind>,
-    pub source_ref_list: Vec<Cow<'a, str>>,
+    pub source_ref_list: Vec<&'a str>,
 }
 
 impl<'a> TokenTable<'a> {
@@ -77,13 +77,13 @@ impl<'a> TokenTable<'a> {
         }
     }
 
-    pub(crate) fn push(&mut self, kind: TokenKind, source_ref: Cow<'a, str>) {
+    pub(crate) fn push(&mut self, kind: TokenKind, source_ref: &'a str) {
         self.tokens.push(kind);
         self.source_ref_list.push(source_ref);
     }
 
-    pub(crate) fn source_at(&self, cursor: usize) -> Cow<'a, str> {
-        self.source_ref_list[cursor].clone()
+    pub(crate) fn source_at(&self, cursor: usize) -> &'a str {
+        self.source_ref_list[cursor]
     }
 
     pub(crate) fn get_kind<I>(&self, index: I) -> Option<&I::Output>

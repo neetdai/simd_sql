@@ -93,10 +93,6 @@ impl<'a> InsertStatement<'a> {
             }
         }
 
-        if maybe_kind(token_table, cursor, &TokenKind::Eof) {
-            *cursor += 1;
-        }
-
         Ok(InsertStatement {
             table,
             columns,

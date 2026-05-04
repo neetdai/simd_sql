@@ -442,7 +442,7 @@ impl<'a> Lexer<'a> {
             }
             Some(b';') => {
                 table.push(
-                    TokenKind::Eof,
+                    TokenKind::Delimiter,
                     unsafe {str::from_utf8_unchecked(&self.inner[start..=end])},
                 );
                 self.position += 1;

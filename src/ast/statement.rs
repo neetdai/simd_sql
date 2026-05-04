@@ -7,14 +7,46 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq)]
-pub enum Statement<'a> {
+pub struct Statement<'a> {
+    pub(crate) list: Vec<StatementInner<'a>>,
+}
+
+impl<'a> Statement<'a> {
+    pub(crate) fn new(token_table: &TokenTable<'a>, cursor: &mut usize) -> Result<Self, ParserError> {
+        let mut list = Vec::new();
+        loop {
+            match token_table.get_kind(*cursor) {
+                Some(TokenKind::Delimiter) => {
+                    *cursor += 1;
+                    continue;
+                } 
+                None => {
+                    break;
+                }
+                _ => {
+                    let inner = StatementInner::new(token_table, cursor)?;
+                    list.push(inner);
+                }
+            }
+        }
+
+        if list.is_empty() {
+            return Err(ParserError::SyntaxError(*cursor, *cursor));
+        }
+
+        Ok(Self { list })
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum StatementInner<'a> {
     Query(Query<'a>),
     Insert(InsertStatement<'a>),
     Update(UpdateStatement<'a>),
     Delete(DeleteStatement<'a>),
 }
 
-impl<'a> Statement<'a> {
+impl<'a> StatementInner<'a> {
     pub(crate) fn new(token_table: &TokenTable<'a>, cursor: &mut usize) -> Result<Self, ParserError> {
         Self::match_statement(token_table, cursor)
     }

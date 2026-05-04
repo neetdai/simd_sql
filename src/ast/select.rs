@@ -50,7 +50,7 @@ impl<'a> SelectStatement<'a> {
                 Some(TokenKind::Comma) => {
                     *cursor += 1;
                 }
-                Some(TokenKind::Keyword(Keyword::Case)) => {
+                Some(TokenKind::Keyword(Keyword::Case)) | Some(TokenKind::Keyword(Keyword::True)) | Some(TokenKind::Keyword(Keyword::False)) | Some(TokenKind::Keyword(Keyword::Null)) => {
                     let expr = Alias::new(token_table, cursor)?;
                     columns.push(expr);
                 }
@@ -74,7 +74,7 @@ impl<'a> SelectStatement<'a> {
                     }
                     Some(TokenKind::RightParen)
                     | Some(TokenKind::Keyword(_))
-                    | Some(TokenKind::Eof) => break,
+                    | Some(TokenKind::Delimiter) => break,
                     Some(_) => {
                         list.push(From::parse(token_table, cursor)?);
                     }

@@ -2,7 +2,10 @@
 // These tests target correctness-first improvements by validating that
 // typical SQL snippets are parsed without errors.
 
-use simd_sql::Parser;
+use std::vec;
+
+use minivec::mini_vec;
+use simd_sql::{Parser, Query, SelectStatement, Statement, ast::statement::StatementInner, common::{alias::Alias, expr::{Between, BinaryOp, BinaryOperator, Expr, Field, In, InValue, Like, NumericLiteral, StringLiteral}, from::{From, Table}, limit::Limit, order::{Order, OrderDirection, OrderItem}}};
 
 // ============================================================================
 // SELECT 语句测试
@@ -662,3 +665,129 @@ fn parse_line_comment_eof() {
     let sql = "SELECT id -- no newline";
     assert!(p.parse(sql).is_ok(), "line comment at EOF should work");
 }
+
+#[test]
+fn parse_big_sql_1() {
+    let p = Parser::new().expect("failed to initialize Parser");
+    let sql = "SELECT 
+    t1.id, t1.name, t1.created_at,
+    t2.order_id, t2.amount, t2.status,
+    t3.log_id, t3.event_type, t3.payload
+FROM user_table t1
+LEFT JOIN order_table t2 ON t1.id = t2.user_id
+LEFT JOIN log_table t3 ON t1.id = t3.user_id
+WHERE 
+    t1.status = 1
+    AND t2.created_at BETWEEN '2024-01-01' AND '2025-01-01'
+    AND t3.event_type IN ('click', 'view', 'purchase')
+    AND (
+        t2.amount > 100 OR 
+        t3.payload LIKE '%error%'
+    )
+ORDER BY t1.created_at DESC
+LIMIT 100;";
+    let result = p.parse(sql).unwrap();
+    assert_eq!(
+        result,
+        Statement {
+            list: vec![
+                StatementInner::Query(Query::Select(SelectStatement {
+                    distinct: false,
+                    columns: vec![
+                        Alias {name: None, value: Expr::Field(Field { prefix: Some("t1"), name: "id" })},
+                        Alias {name: None, value: Expr::Field(Field { prefix: Some("t1"), name: "name" })},
+                        Alias {name: None, value: Expr::Field(Field { prefix: Some("t1"), name: "created_at" })},
+                        Alias {name: None, value: Expr::Field(Field { prefix: Some("t2"), name: "order_id" })},
+                        Alias {name: None, value: Expr::Field(Field { prefix: Some("t2"), name: "amount" })},
+                        Alias {name: None, value: Expr::Field(Field { prefix: Some("t2"), name: "status" })},
+                        Alias {name: None, value: Expr::Field(Field { prefix: Some("t3"), name: "log_id" })},
+                        Alias {name: None, value: Expr::Field(Field { prefix: Some("t3"), name: "event_type" })},
+                        Alias {name: None, value: Expr::Field(Field { prefix: Some("t3"), name: "payload" })},
+
+                    ],
+                    from: Some(mini_vec![From::LeftJoin { 
+                        left: Box::new(From::LeftJoin {
+                            left: Box::new(From::Table(Table::Name(Alias { name: Some("t1"), value: Expr::Field(Field {prefix: None, name: "user_table"}) }))),
+                            right: Box::new(From::Table(Table::Name(Alias { name: Some("t2"), value: Expr::Field(Field {prefix: None, name: "order_table"}) }))),
+                            condition: Expr::BinaryOp(Box::new(BinaryOp {
+                                op: BinaryOperator::Equal,
+                                left: Expr::Field(Field { prefix: Some("t1"), name: "id" }),
+                                right: Expr::Field(Field { prefix: Some("t2"), name: "user_id" })
+                            }))
+                        }),
+                        right: Box::new(From::Table(Table::Name(Alias { name: Some("t3"), value: Expr::Field(Field {prefix: None, name: "log_table"}) }))),
+                        condition: Expr::BinaryOp(Box::new(BinaryOp {
+                            op: BinaryOperator::Equal,
+                            left: Expr::Field(Field { prefix: Some("t1"), name: "id" }),
+                            right: Expr::Field(Field { prefix: Some("t3"), name: "user_id" })
+                        }))
+                    }]),
+                    where_statement: Some(Expr::BinaryOp(Box::new(
+                        BinaryOp {
+                            op: BinaryOperator::And,
+                            left: Expr::BinaryOp(Box::new(BinaryOp{
+                                op: BinaryOperator::And,
+                                left: Expr::BinaryOp(Box::new(BinaryOp {
+                                    op: BinaryOperator::And,
+                                    left: Expr::BinaryOp(Box::new(BinaryOp {
+                                        op: BinaryOperator::Equal,
+                                        left: Expr::Field(Field { prefix: Some("t1"), name: "status" }),
+                                        right: Expr::NumericLiteral(NumericLiteral {
+                                            value: "1"
+                                        })
+                                    })),
+                                    right: Expr::Between(Between {
+                                            is_not: false,
+                                            field: Box::new(Expr::Field(Field { prefix: Some("t2"), name: "created_at" })),
+                                            lower: Box::new(Expr::StringLiteral(StringLiteral {
+                                                value: "'2024-01-01'",
+                                            })),
+                                            upper: Box::new(Expr::StringLiteral(StringLiteral {
+                                                value: "'2025-01-01'",
+                                            })),
+                                        })
+                                })),
+                                right: Expr::In(In {
+                                        is_not: false,
+                                        field: Box::new(Expr::Field(Field { prefix: Some("t3"), name: "event_type" })),
+                                        in_value: InValue::List(mini_vec![
+                                            Expr::StringLiteral(StringLiteral { value: "'click'" }),
+                                            Expr::StringLiteral(StringLiteral { value: "'view'" }),
+                                            Expr::StringLiteral(StringLiteral { value: "'purchase'" }),
+                                        ])
+                                    })
+                            })),
+                            right: Expr::BinaryOp(Box::new(BinaryOp {
+                                op: BinaryOperator::Or,
+                                left: Expr::BinaryOp(Box::new(BinaryOp {
+                                    op: BinaryOperator::Greater,
+                                    left: Expr::Field(Field { prefix: Some("t2"), name: "amount" }),
+                                    right: Expr::NumericLiteral(NumericLiteral { value: "100" }),
+                                })),
+                                right: Expr::Like(Like {
+                                    is_not: false,
+                                    field: Box::new(Expr::Field(Field { prefix: Some("t3"), name: "payload" })),
+                                    pattern: Box::new(Expr::StringLiteral(StringLiteral{value: "'%error%'"}))
+                                }),
+                            }))
+                        }))),
+                    group_by: None,
+                    having_statement: None,
+                    order_by: Some(Order {
+                        columns: mini_vec![
+                            OrderItem{
+                                expr: Expr::Field(Field { prefix: Some("t1"), name: "created_at" }),
+                                direction: OrderDirection::DESC,
+                                nulls_order: None,
+                            }
+                        ]
+                    }),
+                    limit: Some(Limit {
+                        offset: None,
+                        limit: Expr::NumericLiteral(NumericLiteral { value: "100" })
+                    }) }))
+            ]
+        }
+    );
+}
+

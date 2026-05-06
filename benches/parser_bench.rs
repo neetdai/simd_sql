@@ -15,7 +15,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         sql_1,
         |b, i| {
             b.iter(|| {
-                parser.parse(&i).unwrap();
+                parser.parse(black_box(&i)).unwrap();
             });
         },
     );
@@ -331,6 +331,35 @@ FROM students;";
     group.bench_with_input(
         BenchmarkId::new("sql parser 25 - complex aggregation", sql_len_25),
         sql_25,
+        |b, i| {
+            b.iter(|| {
+                parser.parse(black_box(&i)).unwrap();
+            });
+        },
+    );
+
+    let sql_26 = r#"SELECT 
+    t1.id, t1.name, t1.created_at,
+    t2.order_id, t2.amount, t2.status,
+    t3.log_id, t3.event_type, t3.payload
+FROM user_table t1
+LEFT JOIN order_table t2 ON t1.id = t2.user_id
+LEFT JOIN log_table t3 ON t1.id = t3.user_id
+WHERE 
+    t1.status = 1
+    AND t2.created_at BETWEEN '2024-01-01' AND '2025-01-01'
+    AND t3.event_type IN ('click', 'view', 'purchase')
+    AND (
+        t2.amount > 100 OR 
+        t3.payload LIKE '%error%'
+    )
+ORDER BY t1.created_at DESC
+LIMIT 100;"#;
+    let sql_len_26 = sql_26.len();
+    group.throughput(Throughput::Elements(sql_len_26 as u64));
+    group.bench_with_input(
+        BenchmarkId::new("sql parser 25 - complex aggregation", sql_len_26),
+        sql_26,
         |b, i| {
             b.iter(|| {
                 parser.parse(black_box(&i)).unwrap();

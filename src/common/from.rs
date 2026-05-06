@@ -39,30 +39,39 @@ impl<'a> Table<'a> {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum JoinType {
+    LeftJoin,
+    RightJoin,
+    InnerJoin,
+    CrossJoin,
+    FullJoin,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum From<'a> {
     Table(Table<'a>),
     CrossJoin {
-        left: Table<'a>,
-        right: Table<'a>,
+        left: Box<From<'a>>,
+        right: Box<From<'a>>,
     },
     LeftJoin {
-        left: Table<'a>,
-        right: Table<'a>,
+        left: Box<From<'a>>,
+        right: Box<From<'a>>,
         condition: Expr<'a>,
     },
     RightJoin {
-        left: Table<'a>,
-        right: Table<'a>,
+        left: Box<From<'a>>,
+        right: Box<From<'a>>,
         condition: Expr<'a>,
     },
     InnerJoin {
-        left: Table<'a>,
-        right: Table<'a>,
+        left: Box<From<'a>>,
+        right: Box<From<'a>>,
         condition: Expr<'a>,
     },
     FullJoin {
-        left: Table<'a>,
-        right: Table<'a>,
+        left: Box<From<'a>>,
+        right: Box<From<'a>>,
         condition: Expr<'a>,
     },
 }
@@ -85,12 +94,13 @@ impl<'a> From<'a> {
             match token_table.get_kind(*cursor) {
                 Some(TokenKind::Keyword(Keyword::Join)) => {
                     *cursor += 1;
-                    let right = Table::build(token_table, cursor)?;
+                    let left = Box::new(Self::parse_joins(token_table, cursor, current)?);
+                    let right = Box::new(Self::parse(token_table, cursor)?);
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::On))?;
                     *cursor += 1;
                     let condition = Expr::build(token_table, cursor)?;
                     current = From::InnerJoin {
-                        left: Self::extract_table(current),
+                        left,
                         right,
                         condition,
                     };
@@ -99,12 +109,13 @@ impl<'a> From<'a> {
                     *cursor += 1;
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Join))?;
                     *cursor += 1;
-                    let right = Table::build(token_table, cursor)?;
+                    let left = Box::new(Self::parse_joins(token_table, cursor, current)?);
+                    let right = Box::new(Self::parse(token_table, cursor)?);
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::On))?;
                     *cursor += 1;
                     let condition = Expr::build(token_table, cursor)?;
                     current = From::InnerJoin {
-                        left: Self::extract_table(current),
+                        left,
                         right,
                         condition,
                     };
@@ -116,12 +127,13 @@ impl<'a> From<'a> {
                     }
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Join))?;
                     *cursor += 1;
-                    let right = Table::build(token_table, cursor)?;
+                    let left = Box::new(Self::parse_joins(token_table, cursor, current)?);
+                    let right = Box::new(Self::parse(token_table, cursor)?);
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::On))?;
                     *cursor += 1;
                     let condition = Expr::build(token_table, cursor)?;
                     current = From::LeftJoin {
-                        left: Self::extract_table(current),
+                        left,
                         right,
                         condition,
                     };
@@ -133,12 +145,13 @@ impl<'a> From<'a> {
                     }
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Join))?;
                     *cursor += 1;
-                    let right = Table::build(token_table, cursor)?;
+                    let left = Box::new(Self::parse_joins(token_table, cursor, current)?);
+                    let right = Box::new(Self::parse(token_table, cursor)?);
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::On))?;
                     *cursor += 1;
                     let condition = Expr::build(token_table, cursor)?;
                     current = From::RightJoin {
-                        left: Self::extract_table(current),
+                        left,
                         right,
                         condition,
                     };
@@ -150,12 +163,13 @@ impl<'a> From<'a> {
                     }
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Join))?;
                     *cursor += 1;
-                    let right = Table::build(token_table, cursor)?;
+                    let left = Box::new(Self::parse_joins(token_table, cursor, current)?);
+                    let right = Box::new(Self::parse(token_table, cursor)?);
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::On))?;
                     *cursor += 1;
                     let condition = Expr::build(token_table, cursor)?;
                     current = From::FullJoin {
-                        left: Self::extract_table(current),
+                        left,
                         right,
                         condition,
                     };
@@ -164,9 +178,10 @@ impl<'a> From<'a> {
                     *cursor += 1;
                     expect_kind(token_table, cursor, &TokenKind::Keyword(Keyword::Join))?;
                     *cursor += 1;
-                    let right = Table::build(token_table, cursor)?;
+                    let left = Box::new(Self::parse_joins(token_table, cursor, current)?);
+                    let right = Box::new(Self::parse(token_table, cursor)?);
                     current = From::CrossJoin {
-                        left: Self::extract_table(current),
+                        left,
                         right,
                     };
                 }
@@ -174,17 +189,6 @@ impl<'a> From<'a> {
             }
         }
         Ok(current)
-    }
-
-    fn extract_table(from: From<'a>) -> Table<'a> {
-        match from {
-            From::Table(t) => t,
-            From::CrossJoin { left, .. }
-            | From::InnerJoin { left, .. }
-            | From::LeftJoin { left, .. }
-            | From::RightJoin { left, .. }
-            | From::FullJoin { left, .. } => left,
-        }
     }
 }
 
@@ -275,35 +279,39 @@ mod tests {
             }),
         }));
 
-        assert!(matches!(result, From::InnerJoin { .. }));
-        if let From::InnerJoin {
-            left,
-            right,
-            condition,
-        } = result
-        {
-            assert_eq!(
-                left,
-                Table::Name(Alias {
-                    name: None,
-                    value: Expr::Field(Field {
-                        prefix: None,
-                        name: "users"
-                    })
-                })
-            );
-            assert_eq!(
-                right,
-                Table::Name(Alias {
-                    name: None,
-                    value: Expr::Field(Field {
-                        prefix: None,
-                        name: "orders"
-                    })
-                })
-            );
-            assert_eq!(condition, expected_condition);
-        }
+        assert_eq!(result, From::InnerJoin {
+            left: Box::new(From::Table(Table::Name(Alias { name: None, value: Expr::Field(Field { prefix: None, name: "users" }) }))),
+            right: Box::new(From::Table(Table::Name(Alias { name: None, value: Expr::Field(Field { prefix: None, name: "orders" }) }))),
+            condition: expected_condition,
+        });
+        // if let From::InnerJoin {
+        //     left,
+        //     right,
+        //     condition,
+        // } = result
+        // {
+        //     assert_eq!(
+        //         left,
+        //         Table::Name(Alias {
+        //             name: None,
+        //             value: Expr::Field(Field {
+        //                 prefix: None,
+        //                 name: "users"
+        //             })
+        //         })
+        //     );
+        //     assert_eq!(
+        //         right,
+        //         Table::Name(Alias {
+        //             name: None,
+        //             value: Expr::Field(Field {
+        //                 prefix: None,
+        //                 name: "orders"
+        //             })
+        //         })
+        //     );
+        //     assert_eq!(condition, expected_condition);
+        // }
     }
 
     #[test]
@@ -328,7 +336,19 @@ mod tests {
         );
         let mut cursor = 0;
         let result = From::parse(&tokens, &mut cursor).unwrap();
-        assert!(matches!(result, From::InnerJoin { .. }));
+        assert_eq!(result, From::InnerJoin {
+            left: Box::new(From::InnerJoin {
+                left: Box::new(From::Table(Table::Name(Alias { name: None, value: Expr::Field(Field { prefix: None, name: "users" }) }))),
+                right: Box::new(From::Table(Table::Name(Alias { name: None, value: Expr::Field(Field { prefix: None, name: "orders" }) }))),
+                condition: Expr::BinaryOp(Box::new(
+                    BinaryOp { op: BinaryOperator::Equal, left: Expr::Field(Field { prefix: None, name: "user_id" }), right: Expr::Field(Field { prefix: None, name: "user_id" }) },
+                ))
+            }),
+            right: Box::new(From::Table(Table::Name(Alias { name: None, value: Expr::Field(Field { prefix: None, name: "order_items" }) }))),
+            condition: Expr::BinaryOp(Box::new(
+                BinaryOp {op: BinaryOperator::Equal, left: Expr::Field(Field { prefix: None, name: "order_id" }), right: Expr::Field(Field { prefix: None, name: "order_id" })}
+            ))
+        });
     }
 
     #[test]
@@ -347,20 +367,20 @@ mod tests {
         assert_eq!(
             result,
             From::CrossJoin {
-                left: Table::Name(Alias {
+                left: Box::new(From::Table(Table::Name(Alias {
                     name: None,
                     value: Expr::Field(Field {
                         prefix: None,
                         name: "u",
                     }),
-                }),
-                right: Table::Name(Alias {
+                }))),
+                right: Box::new(From::Table(Table::Name(Alias {
                     name: None,
                     value: Expr::Field(Field {
                         prefix: None,
                         name: "o",
                     }),
-                }),
+                }))),
             }
         );
     }

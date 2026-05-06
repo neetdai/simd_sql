@@ -8,7 +8,7 @@ use crate::{
 
 #[derive(Debug, PartialEq)]
 pub struct Statement<'a> {
-    pub(crate) list: Vec<StatementInner<'a>>,
+    pub list: Vec<StatementInner<'a>>,
 }
 
 impl<'a> Statement<'a> {
@@ -39,7 +39,7 @@ impl<'a> Statement<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) enum StatementInner<'a> {
+pub enum StatementInner<'a> {
     Query(Query<'a>),
     Insert(InsertStatement<'a>),
     Update(UpdateStatement<'a>),

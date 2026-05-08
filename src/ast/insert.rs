@@ -59,6 +59,7 @@ impl<'a> InsertValue<'a> {
                         Ok(Self::PartOfSelect { select, columns })
                     },
                     Some(TokenKind::Keyword(Keyword::Values)) => {
+                        *cursor += 1;
                         let mut values = MiniVec::new();
                         loop {
                             match token_table.get_kind(*cursor) {

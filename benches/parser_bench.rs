@@ -358,7 +358,7 @@ LIMIT 100;"#;
     let sql_len_26 = sql_26.len();
     group.throughput(Throughput::Elements(sql_len_26 as u64));
     group.bench_with_input(
-        BenchmarkId::new("sql parser 25 - complex aggregation", sql_len_26),
+        BenchmarkId::new("sql parser 26 - complex query", sql_len_26),
         sql_26,
         |b, i| {
             b.iter(|| {

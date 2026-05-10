@@ -449,7 +449,7 @@ impl<'a> Lexer<'a> {
             }
             Some(b'&') => {
                 table.push(
-                    TokenKind::And,
+                    TokenKind::BitAnd,
                     unsafe {str::from_utf8_unchecked(&self.inner[start..=end])},
                 );
                 self.position += 1;
@@ -463,7 +463,7 @@ impl<'a> Lexer<'a> {
             }
             Some(b'^') => {
                 table.push(
-                    TokenKind::Xor,
+                    TokenKind::BitXor,
                     unsafe {str::from_utf8_unchecked(&self.inner[start..=end]) },
                 );
                 self.position += 1;

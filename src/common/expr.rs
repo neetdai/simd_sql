@@ -28,6 +28,8 @@ pub enum BinaryOperator {
     LessEqual,
     Greater,
     GreaterEqual,
+    BitAnd,
+    BitXor,
     And,
     Or,
     Between,
@@ -50,6 +52,8 @@ impl BinaryOperator {
             TokenKind::LessEqual => Some(BinaryOperator::LessEqual),
             TokenKind::Greater => Some(BinaryOperator::Greater),
             TokenKind::GreaterEqual => Some(BinaryOperator::GreaterEqual),
+            TokenKind::BitAnd => Some(BinaryOperator::BitAnd),
+            TokenKind::BitXor => Some(BinaryOperator::BitXor),
             TokenKind::Keyword(Keyword::And) => Some(BinaryOperator::And),
             TokenKind::Keyword(Keyword::Or) => Some(BinaryOperator::Or),
             TokenKind::Keyword(Keyword::Between) => Some(BinaryOperator::Between),
@@ -69,7 +73,9 @@ impl PrecedenceTrait for BinaryOperator {
             BinaryOperator::Not
             | BinaryOperator::Between
             | BinaryOperator::In
-            | BinaryOperator::Like => 4,
+            | BinaryOperator::Like
+            | BinaryOperator::BitAnd
+            | BinaryOperator::BitXor => 4,
             BinaryOperator::Less
             | BinaryOperator::LessEqual
             | BinaryOperator::Greater

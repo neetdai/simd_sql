@@ -4,7 +4,7 @@ use crate::{
     ParserError, SelectStatement, common::{
         expr::Expr,
         from::Table,
-        utils::{expect_kind, maybe_kind},
+        utils::expect_kind,
     }, keyword::Keyword, token::{TokenKind, TokenTable}
 };
 
@@ -26,6 +26,35 @@ pub enum InsertValue<'a> {
 impl<'a> InsertValue<'a> {
     pub(crate) fn build(token_table: &TokenTable<'a>, cursor: &mut usize) -> Result<Self, ParserError> {
         match token_table.get_kind(*cursor) {
+            Some(TokenKind::Keyword(Keyword::Values)) => {
+                *cursor += 1;
+                let mut values = MiniVec::new();
+                loop {
+                    match token_table.get_kind(*cursor) {
+                        Some(TokenKind::LeftParen) => {
+                            *cursor += 1;
+                            let mut value_row = MiniVec::new();
+                            loop {
+                                match token_table.get_kind(*cursor) {
+                                    Some(TokenKind::Comma) => { *cursor += 1; }
+                                    Some(TokenKind::RightParen) => { break; }
+                                    Some(_) => {
+                                        let value = Expr::build(token_table, cursor)?;
+                                        value_row.push(value);
+                                    }
+                                    None => break,
+                                }
+                            }
+                            expect_kind(token_table, cursor, &TokenKind::RightParen)?;
+                            *cursor += 1;
+                            values.push(value_row);
+                        }
+                        Some(TokenKind::Comma) => { *cursor += 1; }
+                        _ => break,
+                    }
+                }
+                Ok(Self::Values { columns: MiniVec::new(), values })
+            },
             Some(TokenKind::Keyword(Keyword::Select)) => {
                 let select = SelectStatement::new(token_table, cursor)?;
                 Ok(Self::AllSelect { select })

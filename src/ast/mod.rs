@@ -1,4 +1,5 @@
 pub mod cte;
+pub mod ddl;
 pub mod delete;
 pub mod insert;
 pub mod query;

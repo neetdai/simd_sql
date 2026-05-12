@@ -1,4 +1,4 @@
-use super::{insert::InsertStatement, update::UpdateStatement};
+use super::{ddl::DdlStatement, insert::InsertStatement, update::UpdateStatement};
 use crate::{
     ast::{cte::Cte, delete::DeleteStatement, query::Query},
     error::ParserError,
@@ -44,6 +44,7 @@ pub enum StatementInner<'a> {
     Insert(InsertStatement<'a>),
     Update(UpdateStatement<'a>),
     Delete(DeleteStatement<'a>),
+    Ddl(DdlStatement<'a>),
 }
 
 impl<'a> StatementInner<'a> {
@@ -75,6 +76,11 @@ impl<'a> StatementInner<'a> {
             }
             Some(TokenKind::Keyword(Keyword::Delete)) => {
                 Ok(Self::Delete(DeleteStatement::new(token_table, cursor)?))
+            }
+            Some(TokenKind::Keyword(Keyword::Create))
+            | Some(TokenKind::Keyword(Keyword::Drop))
+            | Some(TokenKind::Keyword(Keyword::Alter)) => {
+                DdlStatement::build(token_table, cursor).map(Self::Ddl)
             }
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
         }

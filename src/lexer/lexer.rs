@@ -7,7 +7,6 @@ use crate::{
     },
     token::{TokenKind, TokenTable},
 };
-use std::string::String;
 
 // ============================================================================
 // 1. 静态查找表 (Lookup Table) - 消除分支预测失败
@@ -545,8 +544,6 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
-
     use super::*;
     use crate::token::TokenKind;
 

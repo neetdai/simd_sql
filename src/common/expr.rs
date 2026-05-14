@@ -240,6 +240,9 @@ impl<'a> PrattParserTrait<'a> for Expr<'a> {
                     subquery: Box::new(select_stmt),
                 })))
             }
+            Some(TokenKind::Keyword(Keyword::If)) if let Some(TokenKind::LeftParen) = token_table.get_kind(*cursor + 1) => {
+                Self::class_function_call(token_table, cursor)
+            }
             _ => Err(ParserError::SyntaxError(*cursor, *cursor)),
         }
     }
@@ -526,7 +529,7 @@ impl<'a> FunctionCall<'a> {
     ) -> Result<Self, ParserError> {
         let first = token_table
             .get_kind(*cursor)
-            .map(|kind| kind == &TokenKind::Identifier)
+            .map(|kind| kind == &TokenKind::Identifier || kind == &TokenKind::Keyword(Keyword::If))
             .unwrap_or(false);
         let second = token_table
             .get_kind(*cursor + 1)

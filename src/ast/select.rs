@@ -55,6 +55,10 @@ impl<'a> SelectStatement<'a> {
                     let expr = Alias::new(token_table, cursor)?;
                     columns.push(expr);
                 }
+                Some(TokenKind::Keyword(Keyword::If)) if let Some(TokenKind::LeftParen) = token_table.get_kind(*cursor + 1) => {
+                    let expr = Alias::new(token_table, cursor)?;
+                    columns.push(expr);
+                }
                 Some(TokenKind::Keyword(_)) => break,
                 Some(_) => {
                     let expr = Alias::new(token_table, cursor)?;

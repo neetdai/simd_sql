@@ -10,7 +10,8 @@ use simd_sql::{
             StringLiteral,
         },
         from::{From, Table},
-        group::Group,
+        group::{Group, GroupByExpr},
+        limit::Limit,
         order::{Order, OrderDirection, OrderItem},
     },
 };
@@ -133,7 +134,7 @@ fn test_p0_group_by_numeric_ordinal() {
                 }))]),
                 where_statement: None,
                 group_by: Some(Group {
-                    columns: mini_vec![Expr::NumericLiteral(NumericLiteral { value: "2" })],
+                    columns: mini_vec![GroupByExpr::Simple(Expr::NumericLiteral(NumericLiteral { value: "2" }))],
                 }),
                 having_statement: None,
                 order_by: None,

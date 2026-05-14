@@ -51,10 +51,13 @@ impl<'a> Order<'a> {
                 Some(TokenKind::Keyword(
                     Keyword::Where
                         | Keyword::Group
+                        | Keyword::Grouping
                         | Keyword::Having
                         | Keyword::Order
                         | Keyword::Limit
                         | Keyword::From
+                        | Keyword::Cube
+                        | Keyword::Rollup
                 )) | Some(TokenKind::RightParen | TokenKind::Delimiter)
                 | None
             );

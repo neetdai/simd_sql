@@ -201,8 +201,12 @@ impl<'a> PrattParserTrait<'a> for Expr<'a> {
             Some(TokenKind::Identifier) => {
                 if let Some(TokenKind::LeftParen) = token_table.get_kind(*cursor + 1) {
                     Self::class_function_call(token_table, cursor)
-                } else if let Ok(star) = Self::class_star(token_table, cursor) {
-                    Ok(star)
+                } else if let Some(TokenKind::Dot) = token_table.get_kind(*cursor + 1) {
+                    if let Some(TokenKind::Multiply) = token_table.get_kind(*cursor + 2) {
+                        Self::class_star(token_table, cursor)
+                    } else {
+                        Self::class_field(token_table, cursor)
+                    }
                 } else {
                     Self::class_field(token_table, cursor)
                 }
